@@ -33,6 +33,12 @@ namespace DerivTycoon.API
                 _publicSocket = go.AddComponent<DerivWebSocket>();
             }
 
+            // Remove first to prevent duplicate handlers on reconnect
+            _publicSocket.OnConnected -= HandlePublicConnected;
+            _publicSocket.OnMessageReceived -= HandlePublicMessage;
+            _publicSocket.OnError -= HandlePublicError;
+            _publicSocket.OnDisconnected -= HandlePublicDisconnected;
+
             _publicSocket.OnConnected += HandlePublicConnected;
             _publicSocket.OnMessageReceived += HandlePublicMessage;
             _publicSocket.OnError += HandlePublicError;
@@ -57,6 +63,9 @@ namespace DerivTycoon.API
         private void HandlePublicConnected()
         {
             Debug.Log("[DerivAPI] Public WebSocket connected");
+            // Clear any server-side subscriptions left over from previous sessions
+            _publicSocket.Send("{\"forget_all\":\"ticks\"}");
+            _subscriptionIds.Clear();
             EventBus.WebSocketConnected();
         }
 
@@ -80,8 +89,11 @@ namespace DerivTycoon.API
                     case "active_symbols":
                         HandleActiveSymbolsMessage(json);
                         break;
+                    case "forget_all":
+                        Debug.Log("[DerivAPI] Cleared server-side subscriptions");
+                        break;
                     case "ping":
-                        break; // pong received, connection alive
+                        break;
                     default:
                         Debug.Log($"[DerivAPI] Unhandled message type: {msgType.msg_type}");
                         break;
@@ -100,13 +112,16 @@ namespace DerivTycoon.API
 
         private void HandleTickMessage(string json)
         {
-            // Quick check: if JSON contains "error", parse for error details
             if (json.Contains("\"error\""))
             {
                 var response = JsonUtility.FromJson<TickResponse>(json);
                 if (HasError(response.error))
                 {
-                    Debug.LogError($"[DerivAPI] Tick error: {response.error.message}");
+                    // Market closed is expected on weekends ??? log as warning not error
+                    if (response.error.code == "MarketIsClosed")
+                        Debug.LogWarning($"[DerivAPI] Market closed: {response.error.message}");
+                    else
+                        Debug.LogError($"[DerivAPI] Tick error: {response.error.message}");
                     return;
                 }
             }
@@ -182,7 +197,6 @@ namespace DerivTycoon.API
         private void HandlePublicDisconnected(int code, string reason)
         {
             Debug.LogWarning($"[DerivAPI] Public WS disconnected ({code}): {reason}");
-            // Auto-reconnect after delay
             Invoke(nameof(ReconnectPublic), 3f);
         }
 

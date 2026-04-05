@@ -1,5 +1,6 @@
 using DerivTycoon.API;
 using DerivTycoon.API.Models;
+using DerivTycoon.Trading;
 using UnityEngine;
 
 namespace DerivTycoon.Core
@@ -45,6 +46,7 @@ namespace DerivTycoon.Core
             // Ensure required services exist
             EnsureService<MarketDataStore>("MarketDataStore");
             EnsureService<DerivAPIService>("DerivAPIService");
+            EnsureService<TradeManager>("TradeManager");
 
             // Connect to public WebSocket
             EventBus.OnWebSocketConnected += OnConnected;

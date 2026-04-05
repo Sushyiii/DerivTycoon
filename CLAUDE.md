@@ -12,22 +12,76 @@ A tycoon-style Unity WebGL game for the **Deriv API Grand Prix 2026** competitio
 - **Prize**: Winning app showcased to global clients
 
 ## Tech Stack
-- **Engine**: Unity 6 (6000.0.29f1) with URP (Universal Render Pipeline)
+- **Engine**: Unity 6 (6000.0.72f1) with URP (Universal Render Pipeline)
 - **Build Target**: WebGL
 - **Hosting**: Vercel
 - **API**: Deriv API via WebSocket V3
 - **Backend** (stretch): Vercel serverless functions for OAuth
 
-## Game Concept
-- Player opens trades on commodities/metals/synthetic indices
-- Each trade spawns a thematic building on a city grid
-- Buildings visually react to live P&L from real market data
-- City skyline = portfolio visualization
+## Game Concept — Commodity Mine Tycoon
+Players build and operate commodity mines/forges/refineries on a city grid. Each building is backed by **real Deriv API contracts** using live market data. The game teaches trading concepts (leverage, hedging, stop-loss) through an intuitive tycoon narrative.
+
+### Core Loop
+1. Player selects a commodity and **builds a mine** (opens a Multiplier MULTUP contract)
+2. The mine exists on the grid indefinitely — its value rises and falls with the real commodity price
+3. Player can **enable production** (auto-running 1-minute Multiplier cycles) to generate operational income
+4. Player can **disable production** during dips to avoid operating losses
+5. Player can **insure the mine** (Touch contract with barrier below entry) against price crashes
+6. Player decides when to **sell the mine** (close the ownership Multiplier)
+
+### Three-Layer Trade System
+
+| Layer | Contract Type | Represents | Duration |
+|-------|--------------|------------|----------|
+| **Ownership** | Multiplier (MULTUP) | Mine's market value | Open-ended, player closes |
+| **Production** | Multiplier (MULTUP, 1-min cycles) | Gold extraction & sale | Auto-cycles, player enables/disables |
+| **Insurance** | Touch (ONETOUCH) | Protection against crash | Fixed duration |
+
+### How Multiplier Maps to Mine Ownership
+
+| Real goldmine concept | Multiplier mechanic |
+|---|---|
+| Investment capital | Stake |
+| Scale of operation | Multiplier value (40x–400x) |
+| Ongoing operating costs | Deriv's commission + overnight fees |
+| Revenue from gold sales | Real-time P&L from price movement |
+| Going bankrupt | Stop-out (losses eat entire stake) |
+| Selling the mine | Closing the contract |
+
+### Production Cycle Mechanics
+- Each production cycle = 1-minute Multiplier (MULTUP) with small stake
+- P&L is **proportional** to actual gold movement (not binary win/lose)
+- Gold up → profitable production, revenue added to vault
+- Gold down slightly → small operating loss (workers still got paid, gold sold below cost)
+- Gold down a lot → bigger loss, but proportional
+- Player toggles production ON/OFF based on short-term market predictions:
+  - ON + gold rising = best case (earning operational income)
+  - ON + gold falling = bleeding operating costs
+  - OFF + gold falling = smart move (mine idle, no costs)
+  - OFF + gold rising = missed opportunity
+
+### Insurance Mechanics
+- ONETOUCH with barrier below the ownership entry price
+- Player pays a premium (stake) to buy insurance
+- If gold crashes and hits the barrier → insurance pays out, offsetting Multiplier losses
+- If gold stays above barrier → insurance expires worthless (premium lost, but mine is fine)
+- Narrative: "Insure the mine against gold prices collapsing"
+
+### Mine Visual States
+- **Production ON + profitable**: Busy mine, workers active, gold flowing, conveyor belts running
+- **Production ON + losing**: Workers struggling, dim lighting, foreman shaking head
+- **Production OFF**: Mine idle, lights dim, machinery stopped, but mine still stands
+- **Ownership profitable**: Building grand, upgraded, glowing
+- **Ownership losing**: Building deteriorating, rust, cracks
+- **Stop-out**: Mine collapses dramatically — bank forecloses
+- **Insured**: Shield icon on building, protective aura
+- **Sold (profit)**: Celebratory animation, building becomes a landmark
+- **Sold (loss)**: Building shutters, workers leave
 
 ## Commodity -> Building Mapping
 
-| Commodity | Symbol (Confirmed) | Building Type | Profit Visual | Loss Visual |
-|-----------|-------------------|---------------|---------------|-------------|
+| Commodity | Symbol | Building | Profit Visual | Loss Visual |
+|-----------|--------|----------|---------------|-------------|
 | Gold | frxXAUUSD | Gold Mine | Shaft glows, gold nuggets float | Abandoned, dim |
 | Silver | frxXAGUSD | Silver Mint | Columns grow, silver sheen | Tarnished, idle |
 | Platinum | frxXPTUSD | Platinum Forge | Furnace blazing, ingots stacking | Cooled, cracked |
@@ -155,26 +209,25 @@ Assets/
 │   │   │   ├── MarketDataStore.cs   # Tick cache (last 100 ticks per symbol), latest prices
 │   │   │   └── Models/
 │   │   │       └── TickData.cs      # All data models: TickData, ProposalData, BuyData, ActiveSymbols, etc.
-│   │   ├── Trading/                 # NOT YET IMPLEMENTED
-│   │   │   ├── TradeManager.cs
-│   │   │   └── Trade.cs             # (Trade class currently defined in EventBus.cs — move here later)
-│   │   ├── City/                    # NOT YET IMPLEMENTED
-│   │   │   ├── CityGrid.cs
-│   │   │   ├── GridCell.cs
-│   │   │   ├── CityCamera.cs
-│   │   │   └── BuildingPlacer.cs
-│   │   ├── Buildings/               # NOT YET IMPLEMENTED
-│   │   │   ├── BuildingFactory.cs
-│   │   │   ├── BuildingController.cs
-│   │   │   ├── BuildingVisuals.cs
-│   │   │   └── BuildingConfig.cs
-│   │   └── UI/                      # NOT YET IMPLEMENTED
-│   │       ├── HUD.cs
-│   │       ├── TradePanelUI.cs
-│   │       ├── BuildingInfoUI.cs
-│   │       ├── PortfolioPanelUI.cs
-│   │       ├── MarketTickerUI.cs
-│   │       └── TutorialUI.cs
+│   │   ├── Trading/
+│   │   │   └── TradeManager.cs      # IMPLEMENTED — Singleton, tracks active trades, portfolio, EventBus integration
+│   │   │   # Trade class still in EventBus.cs — move here later
+│   │   ├── City/
+│   │   │   ├── CityGrid.cs          # IMPLEMENTED — 8x8 grid, checkerboard, occupancy
+│   │   │   ├── GridCell.cs          # IMPLEMENTED — Cell data (X, Y, WorldPosition, IsOccupied)
+│   │   │   ├── CityCamera.cs        # IMPLEMENTED — Isometric (45,45,0), ortho, pan/zoom
+│   │   │   └── BuildingPlacer.cs    # IMPLEMENTED — Raycast placement, balance/price guards
+│   │   ├── Buildings/
+│   │   │   ├── BuildingFactory.cs   # IMPLEMENTED — Static factory, 5 commodity configs
+│   │   │   └── BuildingController.cs # IMPLEMENTED — Tick-driven P&L visuals (height + color)
+│   │   │   # BuildingConfig class defined in BuildingFactory.cs
+│   │   └── UI/
+│   │       ├── HUD.cs               # IMPLEMENTED — Balance display + New Trade button
+│   │       ├── TradePanelUI.cs      # IMPLEMENTED — Commodity selection, live price, Place/Cancel
+│   │       ├── BuildingInfoUI.cs    # NOT YET — click mine info panel
+│   │       ├── PortfolioPanelUI.cs  # NOT YET
+│   │       ├── MarketTickerUI.cs    # NOT YET
+│   │       └── TutorialUI.cs        # NOT YET
 │   ├── Plugins/WebGL/
 │   │   └── DerivWebSocket.jslib     # IMPLEMENTED — JS WebSocket bridge
 │   ├── Prefabs/Buildings/           # Empty — needs building prefabs
@@ -197,30 +250,22 @@ Assets/
 
 ### Game States
 ```
-BOOT → Connect public WS → Subscribe to 5 commodity ticks
-  → MAIN_MENU → "Play Demo" → CITY_VIEW
-  → CITY_VIEW → "New Trade" → TRADE_PANEL → Select commodity, Rise/Fall, stake, duration
-  → PLACEMENT_MODE → Click grid cell → Building spawns, trade opens → CITY_VIEW
-  → Click building → BUILDING_INFO (P&L, sell early)
+BOOT → Connect public WS → Subscribe to commodity ticks
+  → MAIN_MENU → "Play Demo" → DEMO_PLAYING (city view)
+  → "New Trade" → TRADE_PANEL → Select commodity
+  → PLACEMENT_MODE → Click grid cell → Mine spawns (ownership Multiplier opens) → DEMO_PLAYING
+  → Click mine → BUILDING_INFO (P&L, toggle production, buy insurance, sell mine)
   → "Portfolio" → PORTFOLIO_VIEW
 ```
 
 ### Demo Mode (MVP)
 - No authentication required
-- Public WS for real tick data
+- Public WS for real tick data (live commodity prices)
 - Virtual $10,000 balance
-- Simulated trades using real price movements to determine win/loss
+- **Simulated Multiplier contracts** using real price movements and real Multiplier math: `P&L = (current - entry) / entry × multiplier × stake`
+- Production cycles simulated locally with real tick data
+- Deriv commission/fees simulated as operating costs
 - Judges can play immediately without an account
-
-## Building Visual States
-- **Construction** (first 3s): rises from ground, dust particles
-- **Strong Profit (>5%)**: 1.3x scale, warm golden tint, particles, flag on top
-- **Mild Profit (0-5%)**: 1.0-1.3x, colors trending warm
-- **Breakeven (~0%)**: Base scale, neutral idle
-- **Mild Loss (0 to -5%)**: 0.7-1.0x, desaturated colors
-- **Heavy Loss (<-5%)**: 0.7x, grey tint, crack particles
-- **Closed (profit)**: Stays at final size, celebratory burst, becomes landmark
-- **Closed (loss)**: Crumbles to ruin, can be demolished
 
 ## UI Layout
 - **Top bar**: Balance, active trade count, portfolio button, settings
@@ -247,14 +292,32 @@ BOOT → Connect public WS → Subscribe to 5 commodity ticks
 If you change default values for serialized fields in code (like `commoditySymbols` array in `GameManager`), existing scene instances keep their OLD serialized values. You must **delete and recreate** the GameObject in the scene, or manually update via Inspector. The MCP `set_property` tool does NOT support array types.
 
 ### Scene setup
-The active scene is `Assets/SampleScene.unity` (originally `Assets/Scenes/SampleScene.unity` but Unity moved it). It contains:
-- Main Camera
-- Directional Light
-- Global Volume (URP post-processing)
-- **GameManager** (empty GO at origin) with `DerivTycoon.Core.GameManager` component
+The active scene is `Assets/SampleScene.unity`. It contains:
+- **Main Camera** — CityCamera component, isometric at (-10, 14, -10), Euler(45,45,0), orthographic size 10, dark navy background
+- **Directional Light**
+- **Global Volume** (URP post-processing)
+- **GameManager** (empty GO at origin) with `DerivTycoon.Core.GameManager` component — moves to DontDestroyOnLoad at runtime, auto-creates MarketDataStore + DerivAPIService + TradeManager
+- **CityGrid** — 8x8 grid centered at origin
+- **BuildingPlacer** — Handles placement mode
+- **UICanvas** (Screen Space Overlay) with:
+  - **HUDPanel** — anchored top, shows balance + New Trade button
+  - **TradePanelRoot** — centered overlay, 5 commodity buttons, live price, Place Building/Cancel
+- **EventSystem** — required for UI interaction
 
-### CoPlay MCP
-The project has `com.coplaydev.coplay` package installed for Unity MCP integration. This allows Claude to interact directly with the Unity Editor (create GameObjects, add components, play/stop, read logs, etc.). The MCP server is configured as: `uvx --python ">=3.11" coplay-mcp-server@latest`
+### AnkleBreaker Unity MCP
+The project uses the [AnkleBreaker Unity MCP](https://github.com/AnkleBreaker-Studio/unity-mcp-plugin) for Unity Editor integration. This gives Claude 288 tools across 30+ categories (GameObjects, components, scripts, builds, profiling, Shader Graph, etc.).
+
+**Unity side**: Install via Package Manager (git URL: `https://github.com/AnkleBreaker-Studio/unity-mcp-plugin.git`). Runs an HTTP bridge on `localhost:7890`. Check status at `Window > MCP Dashboard`.
+
+**Claude Code side**: MCP server is registered as `unity-mcp` and runs from a local clone:
+```
+claude mcp add unity-mcp \
+  -e UNITY_HUB_PATH="/Users/darrenchan/Downloads/Learning and Experimenting/Unity Hub.app/Contents/MacOS/Unity Hub" \
+  -e UNITY_BRIDGE_PORT="7890" \
+  -- node "/Users/darrenchan/Development/AnkleBreakersStudio_UnityMCPServer/unity-mcp-server/src/index.js"
+```
+
+**Important**: Always use the `unity_*` MCP tools — never call `http://127.0.0.1:7890/api/...` directly. Direct HTTP calls bypass the multi-agent queue and agent tracking.
 
 ## Implementation Progress
 
@@ -263,7 +326,7 @@ The project has `com.coplaydev.coplay` package installed for Unity MCP integrati
 - [x] Test pixel buildings archived to `Assets/_Archive/`
 - [x] `DerivWebSocket.jslib` — JS WebSocket bridge for WebGL
 - [x] `DerivWebSocket.cs` — Dual-mode C# wrapper (native for Editor, jslib for WebGL)
-- [x] `DerivAPIService.cs` — High-level API (tick subscriptions, proposals, buy/sell, auto-reconnect, 25s keep-alive ping)
+- [x] `DerivAPIService.cs` — High-level API (tick subscriptions, proposals, buy/sell, auto-reconnect, 25s keep-alive ping, `forget_all` on connect to clear stale subscriptions)
 - [x] `MarketDataStore.cs` — Tick cache with circular buffer (100 ticks per symbol)
 - [x] `GameManager.cs` — Singleton with state machine, balance management, commodity config
 - [x] `EventBus.cs` — Decoupled static event system
@@ -272,26 +335,34 @@ The project has `com.coplaydev.coplay` package installed for Unity MCP integrati
 - [x] **VERIFIED**: WebSocket connects, live tick data flows for `1HZ100V` (~1 tick/sec)
 - [x] **VERIFIED**: Metals symbols are correct but market-hours dependent
 
-### Phase 2: City + Grid — NOT STARTED
-- [ ] `CityGrid.cs` — 8x8 grid, cell occupancy management
-- [ ] `GridCell.cs` — Individual cell state
-- [ ] `CityCamera.cs` — Isometric camera with pan/zoom
-- [ ] `BuildingPlacer.cs` — Raycast to grid, ghost preview, click to place
-- [ ] `BuildingFactory.cs` — Creates building per commodity type
-- [ ] 5 building prefabs (cube-based for MVP)
+### Phase 2: City + Grid + Basic UI — COMPLETED
+- [x] `CityGrid.cs` — 8x8 grid with 2f cell size, checkerboard materials, occupancy management
+- [x] `GridCell.cs` — Data class (X, Y, WorldPosition, IsOccupied, Building reference)
+- [x] `CityCamera.cs` — Isometric camera (45,45,0), orthographic, pan/zoom, dark background
+- [x] `BuildingPlacer.cs` — Raycast to grid, highlight hovered cell, click to place, balance check, entry price guard
+- [x] `BuildingFactory.cs` — Creates cube-based buildings per commodity (5 configs with unique colors/heights)
+- [x] `BuildingController.cs` — Subscribes to ticks, updates height/color based on P&L (±0.05% sensitivity for testing)
+- [x] `TradeManager.cs` — Singleton, tracks active trades via EventBus, handles portfolio
+- [x] `HUD.cs` — Balance display + New Trade button (anchored top, legacy UI.Text)
+- [x] `TradePanelUI.cs` — 5 commodity buttons, live price display, Place Building/Cancel
+- [x] Scene fully wired: UICanvas with HUDPanel + TradePanelRoot, all references connected
+- [x] **VERIFIED**: Full placement flow works — New Trade → select commodity → Place Building → click grid → building spawns with live P&L visuals
 
-### Phase 3: Trading + Visuals — NOT STARTED
-- [ ] `TradeManager.cs` — Manage active trades, P&L tracking
-- [ ] `Trade.cs` — Trade model (move from EventBus.cs)
-- [ ] Demo mode logic (virtual balance, simulated contracts)
-- [ ] `BuildingVisuals.cs` — P&L-driven scale, color, particles
-- [ ] `TradePanelUI.cs`, `HUD.cs`, `MarketTickerUI.cs`
+### Phase 3: Multiplier Trade System — IN PROGRESS
+- [ ] Refactor TradeManager for Multiplier mechanics (continuous P&L, stop-out, commission)
+- [ ] Implement ownership Multiplier (open-ended, long-term hold)
+- [ ] Implement production Multiplier cycles (1-min auto-cycles, player toggle)
+- [ ] Implement insurance via Touch (ONETOUCH, barrier below entry)
+- [ ] Building info panel (click mine → see P&L, toggle production, buy insurance, sell)
+- [ ] Update BuildingController for mine visual states (producing, idle, stop-out, insured)
+- [ ] Update TradePanelUI for new trade flow (select commodity → choose stake/multiplier)
 
 ### Phase 4: Polish — NOT STARTED
+- [ ] Thematic building models (goldmine, silver mint, platinum forge, palladium refinery)
 - [ ] `PortfolioPanelUI.cs`, `BuildingInfoUI.cs`, `ToastNotification.cs`
 - [ ] `MainMenuUI.cs`, `TutorialUI.cs`
 - [ ] Scene transitions, full state machine
-- [ ] Stretch: OAuth backend + live trading
+- [ ] Stretch: OAuth backend + live Deriv account trading
 
 ### Phase 5: Ship — NOT STARTED
 - [ ] Visual polish, post-processing, lighting
@@ -306,17 +377,21 @@ The project has `com.coplaydev.coplay` package installed for Unity MCP integrati
 **MVP (Must ship):**
 - Public WS connection with live commodity/synthetic ticks
 - Demo mode ($10K virtual balance, real prices)
-- 5 building types with P&L-driven visuals
-- Grid city, placement, trade panel, portfolio
-- Tutorial overlay
+- Multiplier-based mine ownership with live P&L
+- Production cycles (1-min Multiplier auto-trades)
+- Grid city, mine placement, trade panel, building info
+- 4 metals + Volatility Index buildings
 - Deployed on Vercel
 
 **Stretch:**
 - OAuth login for real Deriv demo account trading
+- Insurance mechanic (Touch contracts)
+- Thematic 3D building models per commodity
 - Sound effects
-- Post-processing bloom on profitable buildings
-- Building upgrade system
+- Post-processing bloom on profitable mines
+- Mine upgrade system (Tier 1→2→3 with longer ownership)
 - Day/night cycle
+- Market event notifications
 
 ## Complete File Reference (API Surfaces)
 
