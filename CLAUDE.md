@@ -34,7 +34,7 @@ Players build and operate commodity mines/forges/refineries on a city grid. Each
 | Layer | Contract Type | Represents | Duration |
 |-------|--------------|------------|----------|
 | **Ownership** | Multiplier (MULTUP) | Mine's market value | Open-ended, player closes |
-| **Production** | Multiplier (MULTUP, 1-min cycles) | Gold extraction & sale | Auto-cycles, player enables/disables |
+| **Production** | Rise/Fall (CALL, 1-min cycles) | Gold extraction & sale | Auto-cycles, player enables/disables |
 | **Insurance** | Touch (ONETOUCH) | Protection against crash | Fixed duration |
 
 ### How Multiplier Maps to Mine Ownership
@@ -49,16 +49,18 @@ Players build and operate commodity mines/forges/refineries on a city grid. Each
 | Selling the mine | Closing the contract |
 
 ### Production Cycle Mechanics
-- Each production cycle = 1-minute Multiplier (MULTUP) with small stake
-- P&L is **proportional** to actual gold movement (not binary win/lose)
-- Gold up → profitable production, revenue added to vault
-- Gold down slightly → small operating loss (workers still got paid, gold sold below cost)
-- Gold down a lot → bigger loss, but proportional
+- Each production cycle = 1-minute Rise (CALL) trade with small stake (operating cost)
+- **Binary outcome per cycle** — creates clear win/lose moments and dopamine hooks
+- Win (gold went up during cycle) → payout added to mine vault. "Gold extracted and sold at profit!"
+- Loss (gold went down during cycle) → operating cost (stake) lost from cash balance. "Production costs exceeded revenue this cycle."
+- **Vault only fills, never drains** — gold once mined stays in the vault. Losses come from cash, not vault.
 - Player toggles production ON/OFF based on short-term market predictions:
-  - ON + gold rising = best case (earning operational income)
-  - ON + gold falling = bleeding operating costs
+  - ON + gold rising = best case (vault filling, win streaks)
+  - ON + gold falling = bleeding operating costs (losing cycles)
   - OFF + gold falling = smart move (mine idle, no costs)
   - OFF + gold rising = missed opportunity
+- **Win streaks** feel rewarding: "Mine has won 6 cycles in a row!"
+- **Countdown tension** at end of each 1-minute cycle creates engagement
 
 ### Insurance Mechanics
 - ONETOUCH with barrier below the ownership entry price
