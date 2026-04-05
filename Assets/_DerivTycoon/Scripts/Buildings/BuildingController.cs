@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using DerivTycoon.API;
 using DerivTycoon.Core;
 using UnityEngine;
@@ -6,25 +7,32 @@ namespace DerivTycoon.Buildings
 {
     public class BuildingController : MonoBehaviour
     {
-        // Tighten for testing: ??0.05% swing = full red/green response
+        // ??0.05% price swing produces full red???green response (for testing)
         private const float PnLRangePercent = 0.05f;
 
         private string _symbol;
         private BuildingConfig _config;
         private Trade _trade;
-        private Transform _body;
-        private Renderer _bodyRenderer;
-        private float _baseHeight;
+
+        // All renderers in the prefab (for tinting)
+        private Renderer[] _renderers;
+        // Original colors per renderer material (so we can lerp back to neutral)
+        private Color[] _baseColors;
+
+        // Baseline Y scale of the root (so we grow/shrink relative to prefab design)
+        private Vector3 _baseScale;
 
         public void Initialize(string symbol, BuildingConfig config)
         {
             _symbol = symbol;
             _config = config;
-            _baseHeight = config.BaseHeight;
+            _baseScale = transform.localScale;
 
-            _body = transform.Find("Body");
-            if (_body != null)
-                _bodyRenderer = _body.GetComponent<Renderer>();
+            // Collect all child renderers once
+            _renderers = GetComponentsInChildren<Renderer>();
+            _baseColors = new Color[_renderers.Length];
+            for (int i = 0; i < _renderers.Length; i++)
+                _baseColors[i] = _renderers[i].material.color;
         }
 
         public void SetTrade(Trade trade)
@@ -32,15 +40,8 @@ namespace DerivTycoon.Buildings
             _trade = trade;
         }
 
-        private void OnEnable()
-        {
-            EventBus.OnTickReceived += OnTickReceived;
-        }
-
-        private void OnDisable()
-        {
-            EventBus.OnTickReceived -= OnTickReceived;
-        }
+        private void OnEnable()  => EventBus.OnTickReceived += OnTickReceived;
+        private void OnDisable() => EventBus.OnTickReceived -= OnTickReceived;
 
         private void OnTickReceived(API.Models.TickData tick)
         {
@@ -53,49 +54,62 @@ namespace DerivTycoon.Buildings
 
         private void UpdateVisuals(float pnlPercent)
         {
-            if (_body == null || _bodyRenderer == null) return;
+            if (_renderers == null) return;
 
             // t=0 ??? full loss, t=0.5 ??? breakeven, t=1 ??? full profit
             float t = Mathf.InverseLerp(-PnLRangePercent, PnLRangePercent, pnlPercent);
 
-            // Height: 0.6x (loss) ??? 1.5x (profit) of base
-            float heightScale = Mathf.Lerp(0.6f, 1.5f, t);
-            float newHeight = _baseHeight * heightScale;
-            _body.localScale = new Vector3(1.4f, newHeight, 1.4f);
-            _body.localPosition = new Vector3(0, newHeight / 2f, 0);
+            // Overall vertical scale: 0.85x (loss) ??? 1.0x (neutral) ??? 1.18x (profit)
+            float heightScale = Mathf.Lerp(0.85f, 1.18f, t);
+            transform.localScale = new Vector3(_baseScale.x, _baseScale.y * heightScale, _baseScale.z);
 
-            // Color: pure red ??? bright green (very obvious)
-            Color lossColor  = new Color(0.9f, 0.1f, 0.1f);   // red
-            Color evenColor  = new Color(1.0f, 0.8f, 0.1f);   // yellow
-            Color profitColor = new Color(0.1f, 0.95f, 0.2f); // green
+            // Tint: red overlay on loss, green overlay on profit, neutral at breakeven
+            Color tintLoss   = new Color(1.0f, 0.30f, 0.20f);  // warm red
+            Color tintNeutral= Color.white;
+            Color tintProfit = new Color(0.50f, 1.00f, 0.55f);  // fresh green
 
-            Color col = t < 0.5f
-                ? Color.Lerp(lossColor, evenColor, t * 2f)
-                : Color.Lerp(evenColor, profitColor, (t - 0.5f) * 2f);
+            Color tint = t < 0.5f
+                ? Color.Lerp(tintLoss,    tintNeutral, t * 2f)
+                : Color.Lerp(tintNeutral, tintProfit,  (t - 0.5f) * 2f);
 
-            _bodyRenderer.material.color = col;
+            ApplyTint(tint);
+        }
+
+        private void ApplyTint(Color tint)
+        {
+            for (int i = 0; i < _renderers.Length; i++)
+            {
+                // Multiply the tint against the original design colour so themed
+                // colours aren't completely washed out
+                _renderers[i].material.color = _baseColors[i] * tint;
+            }
         }
 
         public void OnTradeClosed(bool isWin)
         {
             EventBus.OnTickReceived -= OnTickReceived;
-
-            if (_body == null || _bodyRenderer == null) return;
+            if (_renderers == null) return;
 
             if (isWin)
             {
-                float h = _baseHeight * 1.6f;
-                _body.localScale = new Vector3(1.4f, h, 1.4f);
-                _body.localPosition = new Vector3(0, h / 2f, 0);
-                _bodyRenderer.material.color = new Color(1f, 0.85f, 0.1f); // gold
+                // Gold shimmer ??? scale up slightly, warm gold tint
+                transform.localScale = new Vector3(_baseScale.x, _baseScale.y * 1.25f, _baseScale.z);
+                ApplyTint(new Color(1.0f, 0.88f, 0.30f));
             }
             else
             {
-                float h = _baseHeight * 0.5f;
-                _body.localScale = new Vector3(1.2f, h, 1.2f);
-                _body.localPosition = new Vector3(0, h / 2f, 0);
-                _bodyRenderer.material.color = Color.grey;
+                // Deflated and grey
+                transform.localScale = new Vector3(_baseScale.x * 0.90f, _baseScale.y * 0.75f, _baseScale.z * 0.90f);
+                ApplyTint(new Color(0.55f, 0.55f, 0.55f));
             }
+        }
+
+        /// <summary>Reset visuals back to prefab original (e.g. after watching without an active trade)</summary>
+        public void ResetVisuals()
+        {
+            transform.localScale = _baseScale;
+            for (int i = 0; i < _renderers.Length; i++)
+                _renderers[i].material.color = _baseColors[i];
         }
     }
 }

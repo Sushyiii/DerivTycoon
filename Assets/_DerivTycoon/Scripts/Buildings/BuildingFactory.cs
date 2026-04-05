@@ -6,21 +6,41 @@ namespace DerivTycoon.Buildings
     {
         private static readonly BuildingConfig[] Configs = new[]
         {
-            new BuildingConfig("frxXAUUSD",  "Gold Mine",          new Color(1.0f, 0.8f, 0.1f), 3.0f),
-            new BuildingConfig("frxXAGUSD",  "Silver Mint",        new Color(0.75f, 0.75f, 0.8f), 2.5f),
-            new BuildingConfig("frxXPTUSD",  "Platinum Forge",     new Color(0.9f, 0.95f, 1.0f), 3.5f),
-            new BuildingConfig("frxXPDUSD",  "Palladium Refinery", new Color(0.5f, 0.6f, 0.75f), 2.0f),
-            new BuildingConfig("1HZ100V",    "Trading Tower",      new Color(0.1f, 0.9f, 0.5f),  4.0f),
+            new BuildingConfig("frxXAUUSD",  "Gold Mine",          new Color(1.0f, 0.8f, 0.1f), 3.0f, "GoldMinePrefab"),
+            new BuildingConfig("frxXAGUSD",  "Silver Mint",        new Color(0.75f, 0.75f, 0.8f), 2.5f, "SilverMintPrefab"),
+            new BuildingConfig("frxXPTUSD",  "Platinum Forge",     new Color(0.9f, 0.95f, 1.0f), 3.5f, "PlatinumForgePrefab"),
+            new BuildingConfig("frxXPDUSD",  "Palladium Refinery", new Color(0.5f, 0.6f, 0.75f), 2.0f, "PalladiumRefineryPrefab"),
+            new BuildingConfig("1HZ100V",    "Trading Tower",      new Color(0.1f, 0.9f, 0.5f),  4.0f, "TradingTowerPrefab"),
         };
 
         public static GameObject Create(string symbol, Vector3 position)
         {
             var config = GetConfig(symbol);
 
+            // Try to load prefab first
+            var prefab = Resources.Load<GameObject>($"Buildings/{config.PrefabName}");
+            if (prefab != null)
+            {
+                var instance = Object.Instantiate(prefab, position, Quaternion.identity);
+                instance.name = $"Building_{config.Name}";
+
+                var controller = instance.GetComponent<BuildingController>();
+                if (controller == null)
+                    controller = instance.AddComponent<BuildingController>();
+                controller.Initialize(symbol, config);
+
+                return instance;
+            }
+
+            // Fallback: procedural two-cube building
+            return CreateProcedural(config, position);
+        }
+
+        private static GameObject CreateProcedural(BuildingConfig config, Vector3 position)
+        {
             var root = new GameObject($"Building_{config.Name}");
             root.transform.position = position;
 
-            // Base cube
             var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
             body.name = "Body";
             body.transform.SetParent(root.transform);
@@ -31,7 +51,6 @@ namespace DerivTycoon.Buildings
             mat.color = config.Color;
             body.GetComponent<Renderer>().material = mat;
 
-            // Rooftop accent
             var roof = GameObject.CreatePrimitive(PrimitiveType.Cube);
             roof.name = "Roof";
             roof.transform.SetParent(root.transform);
@@ -42,9 +61,8 @@ namespace DerivTycoon.Buildings
             roofMat.color = config.Color * 0.6f;
             roof.GetComponent<Renderer>().material = roofMat;
 
-            // Add BuildingController for P&L-driven visuals
             var controller = root.AddComponent<BuildingController>();
-            controller.Initialize(symbol, config);
+            controller.Initialize(symbol: config.Symbol, config);
 
             return root;
         }
@@ -54,8 +72,7 @@ namespace DerivTycoon.Buildings
             foreach (var c in Configs)
                 if (c.Symbol == symbol) return c;
 
-            // Fallback
-            return new BuildingConfig(symbol, symbol, Color.white, 2f);
+            return new BuildingConfig(symbol, symbol, Color.white, 2f, null);
         }
     }
 
@@ -65,13 +82,15 @@ namespace DerivTycoon.Buildings
         public string Name;
         public Color Color;
         public float BaseHeight;
+        public string PrefabName;
 
-        public BuildingConfig(string symbol, string name, Color color, float baseHeight)
+        public BuildingConfig(string symbol, string name, Color color, float baseHeight, string prefabName)
         {
             Symbol = symbol;
             Name = name;
             Color = color;
             BaseHeight = baseHeight;
+            PrefabName = prefabName;
         }
     }
 }
