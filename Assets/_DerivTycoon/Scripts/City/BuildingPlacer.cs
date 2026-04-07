@@ -11,6 +11,7 @@ namespace DerivTycoon.City
 
         [Header("Trade Settings")]
         public float defaultStake = 100f;
+        public int defaultMultiplier = 100;
 
         private GridCell _hoveredCell;
         private int _hoveredX = -1;
@@ -119,6 +120,7 @@ namespace DerivTycoon.City
                     CommodityName = GameManager.Instance.GetCommodityName(_pendingSymbol),
                     ContractType = "CALL",
                     Stake = defaultStake,
+                    Multiplier = defaultMultiplier,
                     EntryPrice = entryPrice,
                     CurrentPrice = entryPrice,
                     StartTime = Time.time,

@@ -118,5 +118,11 @@ namespace DerivTycoon.City
             cell.PlaceBuilding(building);
             return true;
         }
+
+        public void RemoveBuilding(int x, int z)
+        {
+            var cell = GetCell(x, z);
+            cell?.ClearBuilding();
+        }
     }
 }

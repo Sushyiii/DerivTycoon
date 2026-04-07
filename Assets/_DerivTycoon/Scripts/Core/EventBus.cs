@@ -51,6 +51,7 @@ namespace DerivTycoon.Core
         public string CommodityName;
         public string ContractType; // CALL or PUT (Rise or Fall)
         public float Stake;
+        public int Multiplier;      // e.g. 100 → 100x leverage
         public float EntryPrice;
         public float CurrentPrice;
         public float Duration;
@@ -59,14 +60,18 @@ namespace DerivTycoon.Core
         public int GridX;
         public int GridY;
 
-        public float PnL => ContractType == "CALL"
-            ? (CurrentPrice - EntryPrice) / EntryPrice * Stake
-            : (EntryPrice - CurrentPrice) / EntryPrice * Stake;
+        // P&L = price_change_% × multiplier × stake
+        public float PnL => EntryPrice > 0
+            ? (ContractType == "CALL"
+                ? (CurrentPrice - EntryPrice) / EntryPrice * Multiplier * Stake
+                : (EntryPrice - CurrentPrice) / EntryPrice * Multiplier * Stake)
+            : 0f;
 
+        // PnLPercent is the % return on the stake (after multiplier)
         public float PnLPercent => EntryPrice > 0
             ? (ContractType == "CALL"
-                ? (CurrentPrice - EntryPrice) / EntryPrice * 100f
-                : (EntryPrice - CurrentPrice) / EntryPrice * 100f)
+                ? (CurrentPrice - EntryPrice) / EntryPrice * Multiplier * 100f
+                : (EntryPrice - CurrentPrice) / EntryPrice * Multiplier * 100f)
             : 0f;
     }
 }

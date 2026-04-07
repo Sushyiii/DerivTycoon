@@ -1,26 +1,28 @@
-using System.Collections.Generic;
 using DerivTycoon.API;
+using DerivTycoon.City;
 using DerivTycoon.Core;
+using DerivTycoon.UI;
 using UnityEngine;
 
 namespace DerivTycoon.Buildings
 {
     public class BuildingController : MonoBehaviour
     {
-        // ??0.05% price swing produces full red???green response (for testing)
-        private const float PnLRangePercent = 0.05f;
+        // ±20% P&L (after multiplier) = full red→green visual response
+        // At 100x multiplier this corresponds to a ±0.2% price move
+        private const float PnLRangePercent = 20f;
 
         private string _symbol;
         private BuildingConfig _config;
         private Trade _trade;
 
-        // All renderers in the prefab (for tinting)
         private Renderer[] _renderers;
-        // Original colors per renderer material (so we can lerp back to neutral)
         private Color[] _baseColors;
-
-        // Baseline Y scale of the root (so we grow/shrink relative to prefab design)
         private Vector3 _baseScale;
+
+        // Public accessors for BuildingInfoUI
+        public Trade Trade => _trade;
+        public string CommodityName => GameManager.Instance?.GetCommodityName(_symbol) ?? _symbol;
 
         public void Initialize(string symbol, BuildingConfig config)
         {
@@ -28,11 +30,16 @@ namespace DerivTycoon.Buildings
             _config = config;
             _baseScale = transform.localScale;
 
-            // Collect all child renderers once
             _renderers = GetComponentsInChildren<Renderer>();
             _baseColors = new Color[_renderers.Length];
             for (int i = 0; i < _renderers.Length; i++)
                 _baseColors[i] = _renderers[i].material.color;
+
+            // Add a box collider on the root for click detection
+            var col = GetComponent<BoxCollider>();
+            if (col == null) col = gameObject.AddComponent<BoxCollider>();
+            col.center = new Vector3(0, 1.2f, 0);
+            col.size   = new Vector3(2f, 2.4f, 2f);
         }
 
         public void SetTrade(Trade trade)
@@ -40,8 +47,22 @@ namespace DerivTycoon.Buildings
             _trade = trade;
         }
 
-        private void OnEnable()  => EventBus.OnTickReceived += OnTickReceived;
-        private void OnDisable() => EventBus.OnTickReceived -= OnTickReceived;
+        private void OnMouseDown()
+        {
+            BuildingInfoUI.Instance?.Show(this);
+        }
+
+        private void OnEnable()
+        {
+            EventBus.OnTickReceived  += OnTickReceived;
+            EventBus.OnTradeClosed   += OnTradeClosedEvent;
+        }
+
+        private void OnDisable()
+        {
+            EventBus.OnTickReceived  -= OnTickReceived;
+            EventBus.OnTradeClosed   -= OnTradeClosedEvent;
+        }
 
         private void OnTickReceived(API.Models.TickData tick)
         {
@@ -56,17 +77,14 @@ namespace DerivTycoon.Buildings
         {
             if (_renderers == null) return;
 
-            // t=0 ??? full loss, t=0.5 ??? breakeven, t=1 ??? full profit
             float t = Mathf.InverseLerp(-PnLRangePercent, PnLRangePercent, pnlPercent);
 
-            // Overall vertical scale: 0.85x (loss) ??? 1.0x (neutral) ??? 1.18x (profit)
             float heightScale = Mathf.Lerp(0.85f, 1.18f, t);
             transform.localScale = new Vector3(_baseScale.x, _baseScale.y * heightScale, _baseScale.z);
 
-            // Tint: red overlay on loss, green overlay on profit, neutral at breakeven
-            Color tintLoss   = new Color(1.0f, 0.30f, 0.20f);  // warm red
-            Color tintNeutral= Color.white;
-            Color tintProfit = new Color(0.50f, 1.00f, 0.55f);  // fresh green
+            Color tintLoss    = new Color(1.0f, 0.30f, 0.20f);
+            Color tintNeutral = Color.white;
+            Color tintProfit  = new Color(0.50f, 1.00f, 0.55f);
 
             Color tint = t < 0.5f
                 ? Color.Lerp(tintLoss,    tintNeutral, t * 2f)
@@ -78,33 +96,38 @@ namespace DerivTycoon.Buildings
         private void ApplyTint(Color tint)
         {
             for (int i = 0; i < _renderers.Length; i++)
-            {
-                // Multiply the tint against the original design colour so themed
-                // colours aren't completely washed out
                 _renderers[i].material.color = _baseColors[i] * tint;
-            }
         }
 
-        public void OnTradeClosed(bool isWin)
+        private void OnTradeClosedEvent(Trade trade)
         {
-            EventBus.OnTickReceived -= OnTickReceived;
-            if (_renderers == null) return;
+            if (_trade == null || trade.Id != _trade.Id) return;
 
-            if (isWin)
+            // Stop reacting to ticks
+            EventBus.OnTickReceived -= OnTickReceived;
+            EventBus.OnTradeClosed  -= OnTradeClosedEvent;
+
+            bool isWin = trade.PnL >= 0f;
+
+            if (_renderers != null)
             {
-                // Gold shimmer ??? scale up slightly, warm gold tint
-                transform.localScale = new Vector3(_baseScale.x, _baseScale.y * 1.25f, _baseScale.z);
-                ApplyTint(new Color(1.0f, 0.88f, 0.30f));
+                if (isWin)
+                {
+                    transform.localScale = new Vector3(_baseScale.x, _baseScale.y * 1.25f, _baseScale.z);
+                    ApplyTint(new Color(1.0f, 0.88f, 0.30f));
+                }
+                else
+                {
+                    transform.localScale = new Vector3(_baseScale.x * 0.90f, _baseScale.y * 0.75f, _baseScale.z * 0.90f);
+                    ApplyTint(new Color(0.55f, 0.55f, 0.55f));
+                }
             }
-            else
-            {
-                // Deflated and grey
-                transform.localScale = new Vector3(_baseScale.x * 0.90f, _baseScale.y * 0.75f, _baseScale.z * 0.90f);
-                ApplyTint(new Color(0.55f, 0.55f, 0.55f));
-            }
+
+            // Free the grid cell and destroy the building after a short visual pause
+            CityGrid.Instance?.RemoveBuilding(_trade.GridX, _trade.GridY);
+            Destroy(gameObject, 1.5f);
         }
 
-        /// <summary>Reset visuals back to prefab original (e.g. after watching without an active trade)</summary>
         public void ResetVisuals()
         {
             transform.localScale = _baseScale;
