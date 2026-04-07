@@ -110,7 +110,15 @@ namespace DerivTycoon.UI
             }
 
             if (SellButton != null)
+            {
                 SellButton.gameObject.SetActive(_currentTrade.IsActive);
+                SellButton.interactable = !_currentTrade.ProductionEnabled;
+                var sellImg = SellButton.GetComponent<UnityEngine.UI.Image>();
+                if (sellImg != null)
+                    sellImg.color = _currentTrade.ProductionEnabled
+                        ? new Color(0.4f, 0.07f, 0.05f)   // dimmed while producing
+                        : new Color(0.7f, 0.12f, 0.08f);  // full red when available
+            }
         }
 
         private void UpdateProductionDisplay()
