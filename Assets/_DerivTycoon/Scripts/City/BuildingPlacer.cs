@@ -113,6 +113,7 @@ namespace DerivTycoon.City
             var building = BuildingFactory.Create(_pendingSymbol, _hoveredCell.WorldPosition);
             if (CityGrid.Instance.PlaceBuilding(_hoveredX, _hoveredZ, building))
             {
+                var cfg = BuildingFactory.GetConfig(_pendingSymbol);
                 var trade = new Trade
                 {
                     Id = System.Guid.NewGuid().ToString(),
@@ -126,7 +127,14 @@ namespace DerivTycoon.City
                     StartTime = Time.time,
                     IsActive = true,
                     GridX = _hoveredX,
-                    GridY = _hoveredZ
+                    GridY = _hoveredZ,
+                    ProductionCycleDuration = cfg.CycleDuration,
+                    ProductionBarrierOffset = cfg.BarrierOffset,
+                    ProductionStake = 1f,
+                    ProductionEnabled = false,
+                    VaultBalance = 0f,
+                    WinStreak = 0,
+                    TotalCyclesRun = 0
                 };
 
                 var controller = building.GetComponent<BuildingController>();

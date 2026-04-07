@@ -60,6 +60,15 @@ namespace DerivTycoon.Core
         public int GridX;
         public int GridY;
 
+        // Production cycle fields
+        public float ProductionCycleDuration;  // 300f metals, 60f Vol100
+        public float ProductionBarrierOffset;  // 0f metals, -1.2f Vol100
+        public float ProductionStake = 1f;
+        public bool ProductionEnabled;
+        public float VaultBalance;             // accumulated wins, never drains
+        public int WinStreak;
+        public int TotalCyclesRun;
+
         // P&L = price_change_% × multiplier × stake
         public float PnL => EntryPrice > 0
             ? (ContractType == "CALL"

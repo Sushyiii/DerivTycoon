@@ -9,8 +9,8 @@ namespace DerivTycoon.Buildings
     public class BuildingController : MonoBehaviour
     {
         // ±20% P&L (after multiplier) = full red→green visual response
-        // At 100x multiplier this corresponds to a ±0.2% price move
         private const float PnLRangePercent = 20f;
+        private const float ProductionWinPayout = 1.80f; // vault receives this on a win
 
         private string _symbol;
         private BuildingConfig _config;
@@ -20,9 +20,17 @@ namespace DerivTycoon.Buildings
         private Color[] _baseColors;
         private Vector3 _baseScale;
 
-        // Public accessors for BuildingInfoUI
+        // Production cycle state
+        private float _cycleStartTime;
+        private float _cycleStartPrice;
+        private bool _cycleRunning;
+
+        // Public accessors
         public Trade Trade => _trade;
         public string CommodityName => GameManager.Instance?.GetCommodityName(_symbol) ?? _symbol;
+        public float CycleCountdownSeconds => (_cycleRunning && _trade != null)
+            ? Mathf.Max(0f, _trade.ProductionCycleDuration - (Time.time - _cycleStartTime))
+            : 0f;
 
         public void Initialize(string symbol, BuildingConfig config)
         {
@@ -35,7 +43,6 @@ namespace DerivTycoon.Buildings
             for (int i = 0; i < _renderers.Length; i++)
                 _baseColors[i] = _renderers[i].material.color;
 
-            // Add a box collider on the root for click detection
             var col = GetComponent<BoxCollider>();
             if (col == null) col = gameObject.AddComponent<BoxCollider>();
             col.center = new Vector3(0, 1.2f, 0);
@@ -54,15 +61,25 @@ namespace DerivTycoon.Buildings
 
         private void OnEnable()
         {
-            EventBus.OnTickReceived  += OnTickReceived;
-            EventBus.OnTradeClosed   += OnTradeClosedEvent;
+            EventBus.OnTickReceived += OnTickReceived;
+            EventBus.OnTradeClosed  += OnTradeClosedEvent;
         }
 
         private void OnDisable()
         {
-            EventBus.OnTickReceived  -= OnTickReceived;
-            EventBus.OnTradeClosed   -= OnTradeClosedEvent;
+            EventBus.OnTickReceived -= OnTickReceived;
+            EventBus.OnTradeClosed  -= OnTradeClosedEvent;
         }
+
+        private void Update()
+        {
+            if (_trade == null || !_trade.ProductionEnabled || !_cycleRunning) return;
+
+            if (Time.time - _cycleStartTime >= _trade.ProductionCycleDuration)
+                EvaluateCycle();
+        }
+
+        // ==================== Ownership Visuals ====================
 
         private void OnTickReceived(API.Models.TickData tick)
         {
@@ -99,13 +116,125 @@ namespace DerivTycoon.Buildings
                 _renderers[i].material.color = _baseColors[i] * tint;
         }
 
+        // ==================== Production Cycles ====================
+
+        public void ToggleProduction()
+        {
+            if (_trade == null) return;
+
+            if (_trade.ProductionEnabled)
+                StopProduction();
+            else
+                StartProduction();
+        }
+
+        private void StartProduction()
+        {
+            if (_trade == null) return;
+
+            float currentPrice = MarketDataStore.Instance?.GetLatestPrice(_symbol) ?? 0f;
+            if (currentPrice <= 0f)
+            {
+                EventBus.ToastMessage("No market data — try again.");
+                return;
+            }
+
+            if (!GameManager.Instance.SpendBalance(_trade.ProductionStake))
+            {
+                EventBus.ToastMessage("Insufficient funds for production!");
+                return;
+            }
+
+            _trade.ProductionEnabled = true;
+            _cycleStartPrice = currentPrice;
+            _cycleStartTime  = Time.time;
+            _cycleRunning    = true;
+
+            EventBus.TradeUpdated(_trade);
+            Debug.Log($"[Production] Started cycle for {_symbol} @ {currentPrice:F5}");
+        }
+
+        private void StopProduction()
+        {
+            if (_trade == null) return;
+
+            if (_cycleRunning)
+            {
+                // Refund the stake for the abandoned cycle
+                GameManager.Instance?.AddBalance(_trade.ProductionStake);
+                Debug.Log($"[Production] Cycle abandoned, refunded ${_trade.ProductionStake:F2}");
+            }
+
+            _trade.ProductionEnabled = false;
+            _cycleRunning = false;
+
+            EventBus.TradeUpdated(_trade);
+        }
+
+        private void EvaluateCycle()
+        {
+            float currentPrice = MarketDataStore.Instance?.GetLatestPrice(_symbol) ?? 0f;
+            if (currentPrice <= 0f)
+            {
+                // No data — restart cycle without result
+                _cycleStartTime = Time.time;
+                return;
+            }
+
+            _trade.TotalCyclesRun++;
+
+            // Win condition: for ATM (metals) currentPrice > startPrice
+            //                for non-ATM (Vol100) currentPrice > startPrice + barrierOffset
+            float barrier = _cycleStartPrice + _trade.ProductionBarrierOffset;
+            bool win = currentPrice > barrier;
+
+            if (win)
+            {
+                _trade.VaultBalance += ProductionWinPayout;
+                _trade.WinStreak++;
+
+                string streakMsg = _trade.WinStreak >= 4
+                    ? $" Mine on fire! {_trade.WinStreak} in a row!"
+                    : "";
+                EventBus.ToastMessage($"{CommodityName}: Production won! +${ProductionWinPayout - _trade.ProductionStake:F2} to vault{streakMsg}");
+            }
+            else
+            {
+                _trade.WinStreak = 0;
+                EventBus.ToastMessage($"{CommodityName}: Cycle lost. -${_trade.ProductionStake:F2}");
+                // Stake was already spent at cycle start; nothing extra to deduct
+            }
+
+            EventBus.TradeUpdated(_trade);
+            Debug.Log($"[Production] {_symbol} cycle {_trade.TotalCyclesRun}: {(win ? "WIN" : "LOSS")} | vault=${_trade.VaultBalance:F2} | streak={_trade.WinStreak}");
+
+            // Auto-start next cycle: deduct stake and reset timer
+            if (!GameManager.Instance.SpendBalance(_trade.ProductionStake))
+            {
+                // Can't afford next cycle — stop production
+                _trade.ProductionEnabled = false;
+                _cycleRunning = false;
+                EventBus.ToastMessage("Not enough balance — production stopped.");
+                EventBus.TradeUpdated(_trade);
+                return;
+            }
+
+            _cycleStartPrice = currentPrice;
+            _cycleStartTime  = Time.time;
+        }
+
+        // ==================== Trade Close ====================
+
         private void OnTradeClosedEvent(Trade trade)
         {
             if (_trade == null || trade.Id != _trade.Id) return;
 
-            // Stop reacting to ticks
             EventBus.OnTickReceived -= OnTickReceived;
             EventBus.OnTradeClosed  -= OnTradeClosedEvent;
+
+            // Stop production cleanly (no refund on close — mine is selling)
+            _trade.ProductionEnabled = false;
+            _cycleRunning = false;
 
             bool isWin = trade.PnL >= 0f;
 
@@ -123,7 +252,6 @@ namespace DerivTycoon.Buildings
                 }
             }
 
-            // Free the grid cell and destroy the building after a short visual pause
             CityGrid.Instance?.RemoveBuilding(_trade.GridX, _trade.GridY);
             Destroy(gameObject, 1.5f);
         }

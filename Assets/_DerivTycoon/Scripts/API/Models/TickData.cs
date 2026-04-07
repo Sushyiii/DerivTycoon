@@ -135,6 +135,37 @@ namespace DerivTycoon.API.Models
         public int exchange_is_open;
     }
 
+    // ==================== Contracts For ====================
+
+    [Serializable]
+    public class ContractsForResponse
+    {
+        public string msg_type;
+        public ContractsForPayload contracts_for;
+        public ErrorPayload error;
+    }
+
+    [Serializable]
+    public class ContractsForPayload
+    {
+        public AvailableContract[] available;
+    }
+
+    [Serializable]
+    public class AvailableContract
+    {
+        public string contract_type;
+        public string contract_display;
+        public string contract_category;
+        public string contract_category_display;
+        public string min_contract_duration;
+        public string max_contract_duration;
+        public string expiry_type;
+        public string sentiment;
+        public string barrier_category;
+        public string start_type;
+    }
+
     // Generic message type checker
     [Serializable]
     public class MessageType

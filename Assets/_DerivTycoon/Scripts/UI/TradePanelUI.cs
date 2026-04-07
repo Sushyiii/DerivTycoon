@@ -13,8 +13,6 @@ namespace DerivTycoon.UI
         [Header("Commodity Buttons")]
         public Button GoldButton;
         public Button SilverButton;
-        public Button PlatinumButton;
-        public Button PalladiumButton;
         public Button VolatilityButton;
 
         [Header("Info")]
@@ -35,8 +33,6 @@ namespace DerivTycoon.UI
         {
             GoldButton?.onClick.AddListener(() => SelectCommodity("frxXAUUSD", GoldButton));
             SilverButton?.onClick.AddListener(() => SelectCommodity("frxXAGUSD", SilverButton));
-            PlatinumButton?.onClick.AddListener(() => SelectCommodity("frxXPTUSD", PlatinumButton));
-            PalladiumButton?.onClick.AddListener(() => SelectCommodity("frxXPDUSD", PalladiumButton));
             VolatilityButton?.onClick.AddListener(() => SelectCommodity("1HZ100V", VolatilityButton));
 
             ConfirmButton?.onClick.AddListener(OnConfirm);

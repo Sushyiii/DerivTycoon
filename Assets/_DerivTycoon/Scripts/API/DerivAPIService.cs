@@ -89,6 +89,9 @@ namespace DerivTycoon.API
                     case "active_symbols":
                         HandleActiveSymbolsMessage(json);
                         break;
+                    case "contracts_for":
+                        HandleContractsForMessage(json);
+                        break;
                     case "forget_all":
                         Debug.Log("[DerivAPI] Cleared server-side subscriptions");
                         break;
@@ -188,6 +191,28 @@ namespace DerivTycoon.API
             }
         }
 
+        private void HandleContractsForMessage(string json)
+        {
+            var response = JsonUtility.FromJson<ContractsForResponse>(json);
+            if (HasError(response.error))
+            {
+                Debug.LogError($"[DerivAPI] contracts_for error: {response.error.message}");
+                return;
+            }
+
+            if (response.contracts_for?.available != null)
+            {
+                // Extract symbol from the first available contract's sentiment or log raw
+                string symbol = "unknown";
+                if (response.contracts_for.available.Length > 0)
+                {
+                    // The contracts_for response doesn't include the symbol at top level in V3,
+                    // so we pass it through the event and let the caller track it
+                }
+                OnContractsForReceived?.Invoke(symbol, response.contracts_for.available);
+            }
+        }
+
         private void HandlePublicError(string error)
         {
             Debug.LogError($"[DerivAPI] Public WS error: {error}");
@@ -211,6 +236,7 @@ namespace DerivTycoon.API
         public event Action<ProposalPayload> OnProposalReceived;
         public event Action<BuyPayload> OnBuyConfirmed;
         public event Action<ActiveSymbol[]> OnActiveSymbolsReceived;
+        public event Action<string, AvailableContract[]> OnContractsForReceived;
 
         public void SubscribeToTicks(string symbol)
         {
@@ -240,6 +266,14 @@ namespace DerivTycoon.API
         {
             if (_publicSocket == null || !_publicSocket.IsConnected) return;
             _publicSocket.Send("{\"active_symbols\":\"brief\"}");
+        }
+
+        public void RequestContractsFor(string symbol)
+        {
+            if (_publicSocket == null || !_publicSocket.IsConnected) return;
+            string msg = $"{{\"contracts_for\":\"{symbol}\",\"currency\":\"USD\",\"product_type\":\"basic\"}}";
+            _publicSocket.Send(msg);
+            Debug.Log($"[DerivAPI] Requesting contracts_for: {symbol}");
         }
 
         public void RequestProposal(string symbol, string contractType, float amount, int duration, string durationUnit = "m")

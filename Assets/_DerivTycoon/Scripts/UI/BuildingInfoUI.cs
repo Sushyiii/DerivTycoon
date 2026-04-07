@@ -21,6 +21,13 @@ namespace DerivTycoon.UI
         public Text PnLText;
         public Text StakeText;
 
+        [Header("Production")]
+        public Text VaultText;
+        public Text CountdownText;
+        public Text WinStreakText;
+        public Button ToggleProductionButton;
+        public Text ToggleProductionButtonText;
+
         [Header("Actions")]
         public Button SellButton;
         public Button CloseButton;
@@ -38,6 +45,7 @@ namespace DerivTycoon.UI
         {
             SellButton?.onClick.AddListener(OnSell);
             CloseButton?.onClick.AddListener(Hide);
+            ToggleProductionButton?.onClick.AddListener(OnToggleProduction);
             Hide();
         }
 
@@ -47,7 +55,15 @@ namespace DerivTycoon.UI
         private void OnTickReceived(API.Models.TickData tick)
         {
             if (_currentTrade == null || tick.symbol != _currentTrade.Symbol) return;
-            UpdatePriceDisplay();
+            UpdateDisplay();
+        }
+
+        // Update countdown every frame while panel is open
+        private void Update()
+        {
+            if (_currentBuilding == null || _currentTrade == null) return;
+            if (_currentTrade.ProductionEnabled)
+                UpdateCountdown();
         }
 
         public void Show(BuildingController building)
@@ -64,8 +80,14 @@ namespace DerivTycoon.UI
             if (StakeText != null && _currentTrade != null)
                 StakeText.text = $"Stake: ${_currentTrade.Stake:F2}  ×{_currentTrade.Multiplier}";
 
-            UpdatePriceDisplay();
+            UpdateDisplay();
             PanelRoot?.SetActive(true);
+        }
+
+        private void UpdateDisplay()
+        {
+            UpdatePriceDisplay();
+            UpdateProductionDisplay();
         }
 
         private void UpdatePriceDisplay()
@@ -89,6 +111,52 @@ namespace DerivTycoon.UI
 
             if (SellButton != null)
                 SellButton.gameObject.SetActive(_currentTrade.IsActive);
+        }
+
+        private void UpdateProductionDisplay()
+        {
+            if (_currentTrade == null) return;
+
+            if (VaultText != null)
+                VaultText.text = $"Vault: ${_currentTrade.VaultBalance:F2}";
+
+            if (WinStreakText != null)
+                WinStreakText.text = _currentTrade.WinStreak > 0
+                    ? $"Streak: {_currentTrade.WinStreak}"
+                    : $"Cycles: {_currentTrade.TotalCyclesRun}";
+
+            if (ToggleProductionButtonText != null)
+                ToggleProductionButtonText.text = _currentTrade.ProductionEnabled
+                    ? "Stop Production"
+                    : "Start Production";
+
+            if (ToggleProductionButton != null)
+                ToggleProductionButton.gameObject.SetActive(_currentTrade.IsActive);
+
+            UpdateCountdown();
+        }
+
+        private void UpdateCountdown()
+        {
+            if (CountdownText == null || _currentBuilding == null) return;
+
+            if (_currentTrade != null && _currentTrade.ProductionEnabled)
+            {
+                float secs = _currentBuilding.CycleCountdownSeconds;
+                int mins = Mathf.FloorToInt(secs / 60f);
+                int s    = Mathf.FloorToInt(secs % 60f);
+                CountdownText.text = mins > 0 ? $"Next: {mins}m {s:D2}s" : $"Next: {s}s";
+            }
+            else
+            {
+                CountdownText.text = "Production: OFF";
+            }
+        }
+
+        private void OnToggleProduction()
+        {
+            _currentBuilding?.ToggleProduction();
+            UpdateProductionDisplay();
         }
 
         private void OnSell()

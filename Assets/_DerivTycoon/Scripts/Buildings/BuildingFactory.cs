@@ -6,11 +6,9 @@ namespace DerivTycoon.Buildings
     {
         private static readonly BuildingConfig[] Configs = new[]
         {
-            new BuildingConfig("frxXAUUSD",  "Gold Mine",          new Color(1.0f, 0.8f, 0.1f), 3.0f, "GoldMinePrefab"),
-            new BuildingConfig("frxXAGUSD",  "Silver Mint",        new Color(0.75f, 0.75f, 0.8f), 2.5f, "SilverMintPrefab"),
-            new BuildingConfig("frxXPTUSD",  "Platinum Forge",     new Color(0.9f, 0.95f, 1.0f), 3.5f, "PlatinumForgePrefab"),
-            new BuildingConfig("frxXPDUSD",  "Palladium Refinery", new Color(0.5f, 0.6f, 0.75f), 2.0f, "PalladiumRefineryPrefab"),
-            new BuildingConfig("1HZ100V",    "Trading Tower",      new Color(0.1f, 0.9f, 0.5f),  4.0f, "TradingTowerPrefab"),
+            new BuildingConfig("frxXAUUSD", "Gold Mine",     new Color(1.0f, 0.8f, 0.1f),  3.0f, "GoldMinePrefab",     300f, 0f),
+            new BuildingConfig("frxXAGUSD", "Silver Mint",   new Color(0.75f, 0.75f, 0.8f), 2.5f, "SilverMintPrefab",   300f, 0f),
+            new BuildingConfig("1HZ100V",   "Trading Tower", new Color(0.1f, 0.9f, 0.5f),  4.0f, "TradingTowerPrefab",  60f, -1.2f),
         };
 
         public static GameObject Create(string symbol, Vector3 position)
@@ -67,12 +65,12 @@ namespace DerivTycoon.Buildings
             return root;
         }
 
-        private static BuildingConfig GetConfig(string symbol)
+        public static BuildingConfig GetConfig(string symbol)
         {
             foreach (var c in Configs)
                 if (c.Symbol == symbol) return c;
 
-            return new BuildingConfig(symbol, symbol, Color.white, 2f, null);
+            return new BuildingConfig(symbol, symbol, Color.white, 2f, null, 300f, 0f);
         }
     }
 
@@ -83,14 +81,18 @@ namespace DerivTycoon.Buildings
         public Color Color;
         public float BaseHeight;
         public string PrefabName;
+        public float CycleDuration;   // seconds per production cycle
+        public float BarrierOffset;   // 0 = ATM (metals), -1.2 = below spot (Vol100)
 
-        public BuildingConfig(string symbol, string name, Color color, float baseHeight, string prefabName)
+        public BuildingConfig(string symbol, string name, Color color, float baseHeight, string prefabName, float cycleDuration, float barrierOffset)
         {
             Symbol = symbol;
             Name = name;
             Color = color;
             BaseHeight = baseHeight;
             PrefabName = prefabName;
+            CycleDuration = cycleDuration;
+            BarrierOffset = barrierOffset;
         }
     }
 }
