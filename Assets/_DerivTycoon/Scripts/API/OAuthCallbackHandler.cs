@@ -28,6 +28,20 @@ namespace DerivTycoon.API
 #endif
         }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        static void TriggerExchangeAfterSceneLoad()
+        {
+            if (!HasPendingCode) return;
+
+            var auth = UnityEngine.Object.FindAnyObjectByType<DerivAuthService>();
+            Debug.Log($"[DerivAuth] AfterSceneLoad: auth={(auth != null ? "FOUND" : "NOT FOUND")}");
+
+            if (auth != null)
+                auth.TriggerTokenExchange();
+            else
+                Debug.LogError("[DerivAuth] AfterSceneLoad: DerivAuthService not found!");
+        }
+
         public static void ClearPending()
         {
             _pendingCode  = null;

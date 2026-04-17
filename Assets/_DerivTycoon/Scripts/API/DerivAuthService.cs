@@ -94,6 +94,16 @@ namespace DerivTycoon.API
             return "";
         }
 
+        public void TriggerTokenExchange()
+        {
+            if (!OAuthCallbackHandler.HasPendingCode) return;
+            string code  = OAuthCallbackHandler.PendingCode;
+            string state = OAuthCallbackHandler.PendingState;
+            OAuthCallbackHandler.ClearPending();
+            Debug.Log($"[DerivAuth] TriggerTokenExchange: code len={code.Length}");
+            StartCoroutine(ExchangeCodeForToken(code, state));
+        }
+
         // Called by jslib after PKCE generation completes
         // challenge|state
         public void OnPKCEReady(string data)
