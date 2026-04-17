@@ -66,3 +66,14 @@ AmplifyShaderEditor/
 
 # Claude Code local settings (not project settings)
 .claude/settings.local.json
+
+# IDE solution files
+*.slnx
+
+# Screenshots
+Assets/Screenshots/
+Assets/Screenshots.meta
+
+# Unused scenes
+Assets/FirstScene.unity
+Assets/FirstScene.unity.meta

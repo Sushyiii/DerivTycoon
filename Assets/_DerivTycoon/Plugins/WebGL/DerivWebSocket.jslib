@@ -67,6 +67,73 @@ var DerivWebSocketPlugin = {
             return entry.ws.readyState;
         }
         return 3; // CLOSED
+    },
+
+    // ==================== OAuth2 PKCE Functions ====================
+
+    // Read a single query param from the current URL (e.g. "code" or "state")
+    // Returns empty string if not found. Caller must free the returned string.
+    OAuth_GetUrlParam: function(paramPtr) {
+        var param = UTF8ToString(paramPtr);
+        var url = new URL(window.location.href);
+        var value = url.searchParams.get(param) || '';
+        var bytes = lengthBytesUTF8(value) + 1;
+        var buf = _malloc(bytes);
+        stringToUTF8(value, buf, bytes);
+        return buf;
+    },
+
+    // Redirect the browser to the OAuth authorization URL (same tab).
+    OAuth_Redirect: function(urlPtr) {
+        var url = UTF8ToString(urlPtr);
+        window.location.href = url;
+    },
+
+    // Generate PKCE code_verifier + code_challenge using Web Crypto API.
+    // Stores verifier in sessionStorage under key 'deriv_pkce_verifier'.
+    // Stores state in sessionStorage under key 'deriv_oauth_state'.
+    // Calls SendMessage(goName, 'OnPKCEReady', '<challenge>|<state>') when done.
+    OAuth_GeneratePKCE: function(gameObjectNamePtr) {
+        var goName = UTF8ToString(gameObjectNamePtr);
+
+        // Generate random code_verifier (64 random bytes -> base64url)
+        var array = new Uint8Array(64);
+        crypto.getRandomValues(array);
+        var verifier = btoa(String.fromCharCode.apply(null, array))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+        // Generate random state
+        var stateBytes = new Uint8Array(16);
+        crypto.getRandomValues(stateBytes);
+        var state = Array.from(stateBytes).map(function(b) {
+            return b.toString(16).padStart(2, '0');
+        }).join('');
+
+        sessionStorage.setItem('deriv_pkce_verifier', verifier);
+        sessionStorage.setItem('deriv_oauth_state', state);
+
+        // Derive code_challenge = BASE64URL(SHA256(verifier))
+        crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)).then(function(hash) {
+            var challenge = btoa(String.fromCharCode.apply(null, new Uint8Array(hash)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            SendMessage(goName, 'OnPKCEReady', challenge + '|' + state);
+        });
+    },
+
+    // Retrieve the stored code_verifier from sessionStorage.
+    OAuth_GetVerifier: function() {
+        var value = sessionStorage.getItem('deriv_pkce_verifier') || '';
+        var bytes = lengthBytesUTF8(value) + 1;
+        var buf = _malloc(bytes);
+        stringToUTF8(value, buf, bytes);
+        return buf;
+    },
+
+    // Clear OAuth code/state params from the URL bar without reloading the page.
+    OAuth_ClearUrlParams: function() {
+        sessionStorage.removeItem('deriv_pkce_verifier');
+        sessionStorage.removeItem('deriv_oauth_state');
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
 };
 

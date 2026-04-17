@@ -15,7 +15,7 @@ A tycoon-style Unity WebGL game for the **Deriv API Grand Prix 2026** competitio
 - **Engine**: Unity 6 (6000.0.72f1) with URP (Universal Render Pipeline)
 - **Build Target**: WebGL
 - **Hosting**: Vercel
-- **API**: Deriv API via WebSocket V3
+- **API**: Deriv API V2 (new) at `api.derivws.com` for trading + V3 WebSocket for tick data
 - **Backend** (stretch): Vercel serverless functions for OAuth
 
 ## Game Concept — Commodity Mine Tycoon
@@ -80,23 +80,22 @@ Players build and operate commodity mines/forges/refineries on a city grid. Each
 - **Sold (profit)**: Celebratory animation, building becomes a landmark
 - **Sold (loss)**: Building shutters, workers leave
 
-## Commodity -> Building Mapping
+## Commodity -> Building Mapping (3 Active Symbols)
 
-| Commodity | Symbol | Building | Profit Visual | Loss Visual |
-|-----------|--------|----------|---------------|-------------|
-| Gold | frxXAUUSD | Gold Mine | Shaft glows, gold nuggets float | Abandoned, dim |
-| Silver | frxXAGUSD | Silver Mint | Columns grow, silver sheen | Tarnished, idle |
-| Platinum | frxXPTUSD | Platinum Forge | Furnace blazing, ingots stacking | Cooled, cracked |
-| Palladium | frxXPDUSD | Palladium Refinery | Pipes flowing, sparks flying | Pipes rusted, silent |
-| Volatility Index | 1HZ100V | Trading Tower | Screens flashing green, tower grows | Screens red, tower shrinks |
+**Platinum and Palladium were DROPPED** — only support daily CALL/PUT with no Multiplier, unusable for game mechanics.
+
+| Commodity | Symbol | Building | Contract Support |
+|-----------|--------|----------|-----------------|
+| Gold | frxXAUUSD | Gold Mine | MULTUP (no expiry), CALL intraday (5m min), ONETOUCH daily (1d min) |
+| Silver | frxXAGUSD | Silver Mint | MULTUP (no expiry), CALL intraday (5m min), ONETOUCH daily (1d min) |
+| Volatility Index | 1HZ100V | Trading Tower | MULTUP (no expiry), CALL intraday (15s min), ONETOUCH intraday (2m min) |
 
 **Important symbol notes:**
-- Symbols confirmed from the `active_symbols` API endpoint (April 4, 2026)
+- Symbols confirmed from the `active_symbols` AND `contracts_for` API endpoints (April 8, 2026)
 - Metals markets (`frxX*`) are **weekday only** (Mon-Fri). They return "market is presently closed" on weekends.
 - `1HZ100V` (Volatility 100 Index) is **24/7** — always has live ticks. This is essential for demo/judging.
 - Oil, Natural Gas, Sugar are **NOT available** on this API. Only metals exist under `commodities` market.
 - Available markets: `synthetic_index`, `forex`, `indices`, `cryptocurrency`, `commodities`
-- Available submarkets include: `metals`, `commodity_basket`, `random_index`, `random_daily`, `crash_index`, `jump_index`, etc.
 
 ## Deriv API Reference
 
@@ -220,13 +219,13 @@ Assets/
 │   │   │   ├── CityCamera.cs        # IMPLEMENTED — Isometric (45,45,0), ortho, pan/zoom
 │   │   │   └── BuildingPlacer.cs    # IMPLEMENTED — Raycast placement, balance/price guards
 │   │   ├── Buildings/
-│   │   │   ├── BuildingFactory.cs   # IMPLEMENTED — Static factory, 5 commodity configs
-│   │   │   └── BuildingController.cs # IMPLEMENTED — Tick-driven P&L visuals (height + color)
-│   │   │   # BuildingConfig class defined in BuildingFactory.cs
+│   │   │   ├── BuildingFactory.cs   # IMPLEMENTED — Static factory, 3 commodity configs (Gold/Silver/Vol100)
+│   │   │   └── BuildingController.cs # IMPLEMENTED — Tick P&L visuals + production cycle logic
+│   │   │   # BuildingConfig has CycleDuration + BarrierOffset fields
 │   │   └── UI/
 │   │       ├── HUD.cs               # IMPLEMENTED — Balance display + New Trade button
-│   │       ├── TradePanelUI.cs      # IMPLEMENTED — Commodity selection, live price, Place/Cancel
-│   │       ├── BuildingInfoUI.cs    # NOT YET — click mine info panel
+│   │       ├── TradePanelUI.cs      # IMPLEMENTED — 3 commodity buttons, live price, Place/Cancel
+│   │       ├── BuildingInfoUI.cs    # IMPLEMENTED — Click mine panel: P&L, production toggle, vault, sell
 │   │       ├── PortfolioPanelUI.cs  # NOT YET
 │   │       ├── MarketTickerUI.cs    # NOT YET
 │   │       └── TutorialUI.cs        # NOT YET
@@ -301,9 +300,10 @@ The active scene is `Assets/SampleScene.unity`. It contains:
 - **GameManager** (empty GO at origin) with `DerivTycoon.Core.GameManager` component — moves to DontDestroyOnLoad at runtime, auto-creates MarketDataStore + DerivAPIService + TradeManager
 - **CityGrid** — 8x8 grid centered at origin
 - **BuildingPlacer** — Handles placement mode
-- **UICanvas** (Screen Space Overlay) with:
+- **UICanvas** (Screen Space Overlay, ConstantPixelSize) with:
   - **HUDPanel** — anchored top, shows balance + New Trade button
-  - **TradePanelRoot** — centered overlay, 5 commodity buttons, live price, Place Building/Cancel
+  - **TradePanelRoot** — centered overlay, 3 commodity buttons (Gold/Silver/Vol 100), live price, Place Building/Cancel
+  - **BuildingInfoPanelRoot** — right panel with BuildingInfoUI: name, symbol, stake, entry/current price, P&L, production controls (countdown, vault, win streak, toggle), sell button
 - **EventSystem** — required for UI interaction
 
 ### AnkleBreaker Unity MCP
@@ -350,24 +350,54 @@ claude mcp add unity-mcp \
 - [x] Scene fully wired: UICanvas with HUDPanel + TradePanelRoot, all references connected
 - [x] **VERIFIED**: Full placement flow works — New Trade → select commodity → Place Building → click grid → building spawns with live P&L visuals
 
-### Phase 3: Multiplier Trade System — IN PROGRESS
-- [ ] Refactor TradeManager for Multiplier mechanics (continuous P&L, stop-out, commission)
-- [ ] Implement ownership Multiplier (open-ended, long-term hold)
-- [ ] Implement production Multiplier cycles (1-min auto-cycles, player toggle)
-- [ ] Implement insurance via Touch (ONETOUCH, barrier below entry)
-- [ ] Building info panel (click mine → see P&L, toggle production, buy insurance, sell)
-- [ ] Update BuildingController for mine visual states (producing, idle, stop-out, insured)
-- [ ] Update TradePanelUI for new trade flow (select commodity → choose stake/multiplier)
+### Phase 3: Trade System — PARTIALLY COMPLETE
+- [x] Drop Platinum/Palladium (only 3 symbols: Gold, Silver, Vol 100)
+- [x] Production cycles: 5-min CALL for metals (ATM), 1-min CALL for Vol 100 (barrier=spot−1.2)
+- [x] Production stake: $1/cycle, $1.80 vault payout on win, vault only fills
+- [x] BuildingController: Update() countdown, StartCycle/EvaluateCycle, ToggleProduction, StopProduction with stake refund
+- [x] BuildingInfoUI: vault balance, countdown timer, win streak, toggle production button
+- [x] Sell Mine button disabled while production is running
+- [x] TradePanelUI: removed Platinum/Palladium, now 3 commodity buttons
+- [x] DerivAPIService: contracts_for request/response models
+- [x] ContractDebugger: temporary utility for querying contract availability
+- [ ] **NEXT: Hook up to real Deriv API for actual trading** (see Phase 3B below)
+- [ ] Stop-out mechanic (mine collapses when loss exceeds stake)
+- [ ] Insurance via Touch (ONETOUCH, barrier below entry)
+- [ ] Trade panel stake/multiplier selection before placement
 
-### Phase 4: Polish — NOT STARTED
-- [ ] Thematic building models (goldmine, silver mint, platinum forge, palladium refinery)
-- [ ] `PortfolioPanelUI.cs`, `BuildingInfoUI.cs`, `ToastNotification.cs`
+### Phase 3B: Real API Trading — COMPLETED
+OAuth2 PKCE flow implemented. Users authenticate via Deriv login, get `ory_at_...` Bearer token.
+
+**OAuth App**: Registered as "Tycoon" on api.deriv.com dashboard. Client ID stored in Unity Inspector (not in code).
+
+**Architecture:**
+- Keep V3 WS (`ws.derivws.com/websockets/v3?app_id=1089`) for **tick data** (already working)
+- New API (`api.derivws.com/trading/v1`) for **authenticated trading**
+- Auth flow: PKCE redirect → `ory_at_...` token → REST get accounts → REST get OTP → authenticated WS
+- Token should NOT be committed to git — use Inspector field or local config
+- Need to: request real proposals, buy real MULTUP contracts, sell contracts, sync balance from API
+- Trade class needs `DerivContractId` field for real Deriv contract IDs
+- BuildingPlacer needs proposal→buy flow instead of instant local Trade creation
+- TradeManager needs to call real sell API instead of local settlement
+
+**Key endpoints (new API):**
+- `GET https://api.derivws.com/trading/v1/options/accounts` — list accounts (find VRTC demo)
+- `POST https://api.derivws.com/trading/v1/options/accounts/{accountId}/otp` — get OTP for WS
+- `wss://api.derivws.com/trading/v1/options/ws?otp={otp}` — authenticated trading WS
+
+### Phase 4: Polish — IN PROGRESS
+- [x] Imported low-poly asset packs: PurePoly Mining, Synty PolygonGeneric/Starter, Skyden Low Poly, Palmov Island, SimpleTownLite
+- [x] Fixed URP material incompatibility across all third-party asset packs (UpgradeAssetsToURP.cs)
+- [x] Fixed Palmov texture atlas linking (_MainTex → _BaseMap for URP)
+- [ ] Gold mine prefab — still needs work (current iterations didn't look right at game scale)
+- [ ] Silver Mint and Trading Tower prefabs
+- [ ] `PortfolioPanelUI.cs`, `ToastNotification.cs`
 - [ ] `MainMenuUI.cs`, `TutorialUI.cs`
-- [ ] Scene transitions, full state machine
-- [ ] Stretch: OAuth backend + live Deriv account trading
+- [ ] Zoom-in on building click (camera zoom feature)
 
 ### Phase 5: Ship — NOT STARTED
 - [ ] Visual polish, post-processing, lighting
+- [ ] Mobile-responsive UI (CanvasScaler — currently ConstantPixelSize, needs ScaleWithScreenSize)
 - [ ] WebGL optimization (<30MB gzipped target)
 - [ ] Custom WebGL template
 - [ ] Deploy to Vercel
@@ -380,19 +410,20 @@ claude mcp add unity-mcp \
 - Public WS connection with live commodity/synthetic ticks
 - Demo mode ($10K virtual balance, real prices)
 - Multiplier-based mine ownership with live P&L
-- Production cycles (1-min Multiplier auto-trades)
+- Production cycles (5-min CALL for metals, 1-min for Vol 100)
 - Grid city, mine placement, trade panel, building info
-- 4 metals + Volatility Index buildings
+- 3 commodities: Gold, Silver, Volatility 100 Index
+- **Real Deriv API trading on demo account** (using new API at api.derivws.com)
 - Deployed on Vercel
 
 **Stretch:**
-- OAuth login for real Deriv demo account trading
+- OAuth login flow (full web redirect instead of static token)
 - Insurance mechanic (Touch contracts)
-- Thematic 3D building models per commodity
+- Thematic 3D building models per commodity (low-poly style)
+- Zoom-in camera on building click
 - Sound effects
 - Post-processing bloom on profitable mines
-- Mine upgrade system (Tier 1→2→3 with longer ownership)
-- Day/night cycle
+- Mobile-responsive UI
 - Market event notifications
 
 ## Complete File Reference (API Surfaces)
@@ -589,14 +620,23 @@ Static event system for decoupled communication.
 class Trade {
     string Id, Symbol, CommodityName, ContractType; // "CALL" or "PUT"
     float Stake, EntryPrice, CurrentPrice, Duration, StartTime;
+    int Multiplier;       // e.g. 100 → 100x leverage
     bool IsActive;
     int GridX, GridY;
 
-    float PnL { get; }         // Currency P&L based on contract direction
-    float PnLPercent { get; }  // Percentage P&L
+    // Production cycle fields
+    float ProductionCycleDuration;  // 300f metals, 60f Vol100
+    float ProductionBarrierOffset;  // 0f metals, -1.2f Vol100
+    float ProductionStake = 1f;
+    bool ProductionEnabled;
+    float VaultBalance;             // accumulated wins, never drains
+    int WinStreak, TotalCyclesRun;
+
+    float PnL { get; }         // (current - entry) / entry × multiplier × stake
+    float PnLPercent { get; }  // (current - entry) / entry × multiplier × 100
 }
 ```
-P&L formula: CALL → `(current - entry) / entry * stake`; PUT → `(entry - current) / entry * stake`
+P&L formula includes multiplier: CALL → `(current - entry) / entry * multiplier * stake`
 
 ---
 

@@ -60,6 +60,11 @@ namespace DerivTycoon.Core
         public int GridX;
         public int GridY;
 
+        // Real API contract IDs (null = demo mode)
+        public string DerivContractId;           // ownership MULTUP contract ID
+        public string ActiveCycleContractId;     // current production CALL contract ID
+        public string ActiveCycleSubId;          // proposal_open_contract subscription ID
+
         // Production cycle fields
         public float ProductionCycleDuration;  // 300f metals, 60f Vol100
         public float ProductionBarrierOffset;  // 0f metals, -1.2f Vol100

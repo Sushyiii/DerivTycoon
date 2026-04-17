@@ -68,6 +68,7 @@ namespace DerivTycoon.API.Models
         public ProposalPayload proposal;
         public SubscriptionInfo subscription;
         public ErrorPayload error;
+        public int req_id;
     }
 
     [Serializable]
@@ -95,6 +96,7 @@ namespace DerivTycoon.API.Models
         public string msg_type;
         public BuyPayload buy;
         public ErrorPayload error;
+        public int req_id;
     }
 
     [Serializable]
@@ -171,5 +173,118 @@ namespace DerivTycoon.API.Models
     public class MessageType
     {
         public string msg_type;
+    }
+
+    // ==================== New API Trading Models ====================
+
+    // MULTUP proposal — no duration, uses underlying_symbol
+    [Serializable]
+    public class MultiplierProposalRequest
+    {
+        public int proposal = 1;
+        public int subscribe = 1;
+        public string contract_type = "MULTUP";
+        public string underlying_symbol;
+        public float amount;
+        public string basis = "stake";
+        public int multiplier;
+        public string currency = "USD";
+        public int req_id;
+    }
+
+    // Sell WS response — outer key is "sell" (not "sold")
+    [Serializable]
+    public class SellResponse
+    {
+        public string msg_type;
+        public SellPayload sell;
+        public ErrorPayload error;
+        public int req_id;
+    }
+
+    [Serializable]
+    public class SellPayload
+    {
+        public float balance_after;
+        public float sold_for;
+        public long contract_id;
+        public long transaction_id;
+    }
+
+    // Balance WS response
+    [Serializable]
+    public class BalanceResponse
+    {
+        public string msg_type;
+        public BalancePayload balance;
+        public SubscriptionInfo subscription;
+        public ErrorPayload error;
+    }
+
+    [Serializable]
+    public class BalancePayload
+    {
+        public float balance;
+        public string currency;
+        public string loginid;
+    }
+
+    // proposal_open_contract WS request + response
+    [Serializable]
+    public class ProposalOpenContractRequest
+    {
+        public int proposal_open_contract = 1;
+        public int subscribe = 1;
+        public long contract_id;
+    }
+
+    [Serializable]
+    public class ProposalOpenContractResponse
+    {
+        public string msg_type;
+        public ProposalOpenContractPayload proposal_open_contract;
+        public SubscriptionInfo subscription;
+        public ErrorPayload error;
+    }
+
+    [Serializable]
+    public class ProposalOpenContractPayload
+    {
+        public long contract_id;
+        public string status;
+        public int is_expired;
+        public float profit;
+        public float payout;
+        public float bid_price;
+        public float buy_price;
+    }
+
+    // REST: accounts response — wrapped in {"data": [...], "meta": {...}}
+    [Serializable]
+    public class AccountsRestResponse
+    {
+        public AccountRestData[] data;
+    }
+
+    [Serializable]
+    public class AccountRestData
+    {
+        public string account_id;
+        public string account_type;
+        public string currency;
+        public float balance;
+    }
+
+    // REST: OTP response — response.data.url is the WS URL
+    [Serializable]
+    public class OtpRestResponse
+    {
+        public OtpData data;
+    }
+
+    [Serializable]
+    public class OtpData
+    {
+        public string url;
     }
 }

@@ -48,9 +48,27 @@ namespace DerivTycoon.Core
             EnsureService<DerivAPIService>("DerivAPIService");
             EnsureService<TradeManager>("TradeManager");
 
-            // Connect to public WebSocket
+            // Wire up trading auth if service is present on this GO
+            var authService = GetComponent<API.DerivAuthService>();
+            if (authService != null)
+                authService.OnTradingWsReady += OnTradingWsReady;
+
+            // Connect to public WebSocket for tick data
             EventBus.OnWebSocketConnected += OnConnected;
             DerivAPIService.Instance.ConnectPublic();
+        }
+
+        private void OnTradingWsReady(string wsUrl)
+        {
+            EnsureService<API.DerivTradingService>("DerivTradingService");
+            var trading = API.DerivTradingService.Instance;
+            trading.Connect(wsUrl);
+            trading.OnBalanceUpdated += SyncBalance;
+            trading.SubscribeBalance();
+            IsDemoMode = false;
+            Debug.Log("[GameManager] Live trading mode active");
+            if (CurrentState == GameState.DemoPlaying)
+                SetState(GameState.LivePlaying);
         }
 
         private void OnConnected()
@@ -103,6 +121,12 @@ namespace DerivTycoon.Core
             EventBus.BalanceChanged(Balance);
         }
 
+        public void SyncBalance(float amount)
+        {
+            Balance = amount;
+            EventBus.BalanceChanged(Balance);
+        }
+
         public string GetCommodityName(string symbol)
         {
             return symbol switch
@@ -129,6 +153,9 @@ namespace DerivTycoon.Core
         private void OnDestroy()
         {
             EventBus.OnWebSocketConnected -= OnConnected;
+            var trading = API.DerivTradingService.Instance;
+            if (trading != null)
+                trading.OnBalanceUpdated -= SyncBalance;
         }
     }
 }

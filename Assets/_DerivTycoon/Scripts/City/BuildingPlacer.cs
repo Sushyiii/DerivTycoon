@@ -1,3 +1,5 @@
+using DerivTycoon.API;
+using DerivTycoon.API.Models;
 using DerivTycoon.Buildings;
 using DerivTycoon.Core;
 using DerivTycoon.Trading;
@@ -18,6 +20,9 @@ namespace DerivTycoon.City
         private int _hoveredZ = -1;
         private string _pendingSymbol;
         private bool _isPlacementMode;
+        private bool _waitingForBuy;
+        private int _nextReqId;
+        private GridCell _pendingCell;
 
         private void Awake()
         {
@@ -54,7 +59,7 @@ namespace DerivTycoon.City
 
             RaycastToGrid();
 
-            if (Input.GetMouseButtonDown(0) && _hoveredCell != null && !_hoveredCell.IsOccupied)
+            if (Input.GetMouseButtonDown(0) && _hoveredCell != null && !_hoveredCell.IsOccupied && !_waitingForBuy)
                 PlaceBuilding();
         }
 
@@ -95,10 +100,10 @@ namespace DerivTycoon.City
         {
             if (string.IsNullOrEmpty(_pendingSymbol)) return;
 
-            float entryPrice = API.MarketDataStore.Instance?.GetLatestPrice(_pendingSymbol) ?? 0f;
+            float entryPrice = MarketDataStore.Instance?.GetLatestPrice(_pendingSymbol) ?? 0f;
             if (entryPrice <= 0f)
             {
-                EventBus.ToastMessage("No market data yet ??? try again in a moment.");
+                EventBus.ToastMessage("No market data yet — try again in a moment.");
                 GameManager.Instance.SetState(GameState.DemoPlaying);
                 return;
             }
@@ -110,8 +115,52 @@ namespace DerivTycoon.City
                 return;
             }
 
-            var building = BuildingFactory.Create(_pendingSymbol, _hoveredCell.WorldPosition);
-            if (CityGrid.Instance.PlaceBuilding(_hoveredX, _hoveredZ, building))
+            var trading = DerivTradingService.Instance;
+            if (trading != null && trading.IsReady)
+                PlaceBuildingLive(entryPrice);
+            else
+                PlaceBuildingDemo(entryPrice, null);
+        }
+
+        private void PlaceBuildingLive(float entryPrice)
+        {
+            _pendingCell = _hoveredCell;
+            _waitingForBuy = true;
+            int reqId = ++_nextReqId;
+
+            var trading = DerivTradingService.Instance;
+
+            void OnProposal(ProposalPayload proposal, int id)
+            {
+                if (id != reqId) return;
+                trading.OnProposalReceived -= OnProposal;
+                trading.BuyProposal(proposal.id, proposal.ask_price, reqId);
+                trading.ForgetProposal(proposal.id);
+            }
+
+            void OnBuy(BuyPayload buy, int id)
+            {
+                if (id != reqId) return;
+                trading.OnBuyConfirmed -= OnBuy;
+                GameManager.Instance.SyncBalance(buy.balance_after);
+                PlaceBuildingDemo(entryPrice, buy.contract_id.ToString());
+                _waitingForBuy = false;
+            }
+
+            trading.OnProposalReceived += OnProposal;
+            trading.OnBuyConfirmed += OnBuy;
+            trading.RequestMultiplierProposal(_pendingSymbol, defaultStake, defaultMultiplier, reqId);
+        }
+
+        private void PlaceBuildingDemo(float entryPrice, string derivContractId)
+        {
+            var cell = _pendingCell ?? _hoveredCell;
+            int cellX = _pendingCell != null ? _pendingCell.X : _hoveredX;
+            int cellZ = _pendingCell != null ? _pendingCell.Y : _hoveredZ;
+            _pendingCell = null;
+
+            var building = BuildingFactory.Create(_pendingSymbol, cell.WorldPosition);
+            if (CityGrid.Instance.PlaceBuilding(cellX, cellZ, building))
             {
                 var cfg = BuildingFactory.GetConfig(_pendingSymbol);
                 var trade = new Trade
@@ -126,8 +175,9 @@ namespace DerivTycoon.City
                     CurrentPrice = entryPrice,
                     StartTime = Time.time,
                     IsActive = true,
-                    GridX = _hoveredX,
-                    GridY = _hoveredZ,
+                    GridX = cellX,
+                    GridY = cellZ,
+                    DerivContractId = derivContractId,
                     ProductionCycleDuration = cfg.CycleDuration,
                     ProductionBarrierOffset = cfg.BarrierOffset,
                     ProductionStake = 1f,
@@ -143,12 +193,14 @@ namespace DerivTycoon.City
                 EventBus.TradeOpened(trade);
                 GameManager.Instance.SetState(GameState.DemoPlaying);
 
-                Debug.Log($"[BuildingPlacer] Placed {trade.CommodityName} @ {entryPrice:F5} stake=${defaultStake}");
+                string mode = derivContractId != null ? $"LIVE contract={derivContractId}" : "DEMO";
+                Debug.Log($"[BuildingPlacer] Placed {trade.CommodityName} @ {entryPrice:F5} stake=${defaultStake} [{mode}]");
             }
             else
             {
                 Object.Destroy(building);
                 GameManager.Instance.AddBalance(defaultStake);
+                _waitingForBuy = false;
             }
         }
 

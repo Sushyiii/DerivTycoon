@@ -1,4 +1,5 @@
 using DerivTycoon.API;
+using DerivTycoon.API.Models;
 using DerivTycoon.City;
 using DerivTycoon.Core;
 using DerivTycoon.UI;
@@ -24,6 +25,7 @@ namespace DerivTycoon.Buildings
         private float _cycleStartTime;
         private float _cycleStartPrice;
         private bool _cycleRunning;
+        private int _cycleReqId;
 
         // Public accessors
         public Trade Trade => _trade;
@@ -149,9 +151,113 @@ namespace DerivTycoon.Buildings
             _cycleStartPrice = currentPrice;
             _cycleStartTime  = Time.time;
             _cycleRunning    = true;
-
             EventBus.TradeUpdated(_trade);
+
+            var trading = DerivTradingService.Instance;
+            if (trading != null && trading.IsReady)
+                StartCycleLive(trading);
+
             Debug.Log($"[Production] Started cycle for {_symbol} @ {currentPrice:F5}");
+        }
+
+        private void StartCycleLive(DerivTradingService trading)
+        {
+            int reqId = ++_cycleReqId;
+            int durationSecs = (int)_trade.ProductionCycleDuration;
+
+            void OnProposal(ProposalPayload proposal, int id)
+            {
+                if (id != reqId) return;
+                trading.OnProposalReceived -= OnProposal;
+                trading.BuyProposal(proposal.id, proposal.ask_price, reqId);
+                trading.ForgetProposal(proposal.id);
+            }
+
+            void OnBuy(BuyPayload buy, int id)
+            {
+                if (id != reqId) return;
+                trading.OnBuyConfirmed -= OnBuy;
+                _trade.ActiveCycleContractId = buy.contract_id.ToString();
+                trading.SubscribeContractUpdates(buy.contract_id);
+                trading.OnContractUpdated += OnContractUpdate;
+                Debug.Log($"[Production] CALL contract {buy.contract_id} bought for {_symbol}");
+            }
+
+            trading.OnProposalReceived += OnProposal;
+            trading.OnBuyConfirmed += OnBuy;
+            trading.RequestCallProposal(
+                _symbol,
+                _trade.ProductionStake,
+                durationSecs,
+                _trade.ProductionBarrierOffset,
+                reqId
+            );
+        }
+
+        private void OnContractUpdate(ProposalOpenContractPayload payload)
+        {
+            if (_trade == null || payload == null) return;
+            if (payload.contract_id.ToString() != _trade.ActiveCycleContractId) return;
+
+            // Cache subscription ID on first update
+            if (string.IsNullOrEmpty(_trade.ActiveCycleSubId))
+            {
+                string subId = DerivTradingService.Instance?.GetContractSubId(payload.contract_id);
+                if (!string.IsNullOrEmpty(subId))
+                    _trade.ActiveCycleSubId = subId;
+            }
+
+            bool expired = payload.is_expired == 1
+                || payload.status == "won"
+                || payload.status == "lost";
+
+            if (!expired) return;
+
+            DerivTradingService.Instance.OnContractUpdated -= OnContractUpdate;
+            DerivTradingService.Instance.ForgetContractUpdates(_trade.ActiveCycleSubId);
+            EvaluateCycleLive(payload);
+        }
+
+        private void EvaluateCycleLive(ProposalOpenContractPayload payload)
+        {
+            _trade.TotalCyclesRun++;
+            bool win = payload.profit > 0;
+
+            if (win)
+            {
+                _trade.VaultBalance += payload.payout;
+                _trade.WinStreak++;
+                string streakMsg = _trade.WinStreak >= 4 ? $" Mine on fire! {_trade.WinStreak} in a row!" : "";
+                EventBus.ToastMessage($"{CommodityName}: Production won! +${payload.payout - _trade.ProductionStake:F2} to vault{streakMsg}");
+            }
+            else
+            {
+                _trade.WinStreak = 0;
+                EventBus.ToastMessage($"{CommodityName}: Cycle lost. -${_trade.ProductionStake:F2}");
+            }
+
+            _trade.ActiveCycleContractId = null;
+            _trade.ActiveCycleSubId = null;
+            _cycleRunning = false;
+            EventBus.TradeUpdated(_trade);
+
+            Debug.Log($"[Production] LIVE {_symbol} cycle {_trade.TotalCyclesRun}: {(win ? "WIN" : "LOSS")} | vault=${_trade.VaultBalance:F2}");
+
+            // Auto-start next cycle
+            if (_trade.ProductionEnabled)
+            {
+                if (!GameManager.Instance.SpendBalance(_trade.ProductionStake))
+                {
+                    _trade.ProductionEnabled = false;
+                    EventBus.ToastMessage("Not enough balance — production stopped.");
+                    EventBus.TradeUpdated(_trade);
+                    return;
+                }
+                _cycleStartPrice = MarketDataStore.Instance?.GetLatestPrice(_symbol) ?? _cycleStartPrice;
+                _cycleStartTime  = Time.time;
+                _cycleRunning    = true;
+                StartCycleLive(DerivTradingService.Instance);
+            }
         }
 
         private void StopProduction()
@@ -163,6 +269,15 @@ namespace DerivTycoon.Buildings
                 // Refund the stake for the abandoned cycle
                 GameManager.Instance?.AddBalance(_trade.ProductionStake);
                 Debug.Log($"[Production] Cycle abandoned, refunded ${_trade.ProductionStake:F2}");
+
+                // Unsubscribe from live contract updates
+                if (DerivTradingService.Instance != null)
+                {
+                    DerivTradingService.Instance.OnContractUpdated -= OnContractUpdate;
+                    DerivTradingService.Instance.ForgetContractUpdates(_trade.ActiveCycleSubId);
+                }
+                _trade.ActiveCycleContractId = null;
+                _trade.ActiveCycleSubId = null;
             }
 
             _trade.ProductionEnabled = false;
@@ -235,6 +350,13 @@ namespace DerivTycoon.Buildings
             // Stop production cleanly (no refund on close — mine is selling)
             _trade.ProductionEnabled = false;
             _cycleRunning = false;
+
+            // Clean up any live contract subscriptions
+            if (DerivTradingService.Instance != null)
+            {
+                DerivTradingService.Instance.OnContractUpdated -= OnContractUpdate;
+                DerivTradingService.Instance.ForgetContractUpdates(_trade.ActiveCycleSubId);
+            }
 
             bool isWin = trade.PnL >= 0f;
 

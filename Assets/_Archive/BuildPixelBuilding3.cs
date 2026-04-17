@@ -1,3 +1,4 @@
+#if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
 
@@ -214,3 +215,4 @@ public class BuildPixelBuilding3
         Debug.Log("PixelBuilding3 created successfully!");
     }
 }
+#endif
