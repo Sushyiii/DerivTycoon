@@ -63,10 +63,13 @@ namespace DerivTycoon.API
                 OnAuthRequired?.Invoke();
             }
 #elif UNITY_WEBGL
-            // WebGL: check if returning from OAuth redirect
-            string code = OAuth_GetUrlParam("code");
-            string state = OAuth_GetUrlParam("state");
-            Debug.Log($"[DerivAuth] Start() — code='{(string.IsNullOrEmpty(code) ? "EMPTY" : code.Substring(0, Mathf.Min(20, code.Length)) + "...")}' state='{(string.IsNullOrEmpty(state) ? "EMPTY" : "found")}'");
+            // WebGL: use Application.absoluteURL to read OAuth callback params (more reliable than jslib)
+            string absoluteUrl = Application.absoluteURL;
+            Debug.Log($"[DerivAuth] Start() absoluteURL={absoluteUrl.Substring(0, Mathf.Min(80, absoluteUrl.Length))}");
+
+            string code  = GetQueryParam(absoluteUrl, "code");
+            string state = GetQueryParam(absoluteUrl, "state");
+            Debug.Log($"[DerivAuth] code='{(string.IsNullOrEmpty(code) ? "EMPTY" : code.Substring(0, Mathf.Min(20, code.Length)) + "...")}' state='{(string.IsNullOrEmpty(state) ? "EMPTY" : "found")}'");
 
             if (!string.IsNullOrEmpty(code))
             {
@@ -81,6 +84,20 @@ namespace DerivTycoon.API
 #else
             OnAuthRequired?.Invoke();
 #endif
+        }
+
+        private static string GetQueryParam(string url, string key)
+        {
+            int qIndex = url.IndexOf('?');
+            if (qIndex < 0) return "";
+            string query = url.Substring(qIndex + 1);
+            foreach (string part in query.Split('&'))
+            {
+                int eq = part.IndexOf('=');
+                if (eq > 0 && part.Substring(0, eq) == key)
+                    return Uri.UnescapeDataString(part.Substring(eq + 1));
+            }
+            return "";
         }
 
         // Called by jslib after PKCE generation completes
