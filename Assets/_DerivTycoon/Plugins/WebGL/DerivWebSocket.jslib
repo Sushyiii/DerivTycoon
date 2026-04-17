@@ -110,8 +110,8 @@ var DerivWebSocketPlugin = {
             return b.toString(16).padStart(2, '0');
         }).join('');
 
-        sessionStorage.setItem('deriv_pkce_verifier', verifier);
-        sessionStorage.setItem('deriv_oauth_state', state);
+        localStorage.setItem('deriv_pkce_verifier', verifier);
+        localStorage.setItem('deriv_oauth_state', state);
 
         // Derive code_challenge = BASE64URL(SHA256(verifier))
         crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)).then(function(hash) {
@@ -123,7 +123,7 @@ var DerivWebSocketPlugin = {
 
     // Retrieve the stored code_verifier from sessionStorage.
     OAuth_GetVerifier: function() {
-        var value = sessionStorage.getItem('deriv_pkce_verifier') || '';
+        var value = localStorage.getItem('deriv_pkce_verifier') || '';
         var bytes = lengthBytesUTF8(value) + 1;
         var buf = _malloc(bytes);
         stringToUTF8(value, buf, bytes);
@@ -132,8 +132,8 @@ var DerivWebSocketPlugin = {
 
     // Clear OAuth code/state params from the URL bar without reloading the page.
     OAuth_ClearUrlParams: function() {
-        sessionStorage.removeItem('deriv_pkce_verifier');
-        sessionStorage.removeItem('deriv_oauth_state');
+        localStorage.removeItem('deriv_pkce_verifier');
+        localStorage.removeItem('deriv_oauth_state');
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 };
