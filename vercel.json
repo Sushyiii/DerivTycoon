@@ -10,6 +10,27 @@
       ]
     },
     {
+      "source": "/Build/WebGL.framework.js.br",
+      "headers": [
+        { "key": "Content-Encoding", "value": "br" },
+        { "key": "Content-Type", "value": "application/javascript" }
+      ]
+    },
+    {
+      "source": "/Build/WebGL.wasm.br",
+      "headers": [
+        { "key": "Content-Encoding", "value": "br" },
+        { "key": "Content-Type", "value": "application/wasm" }
+      ]
+    },
+    {
+      "source": "/Build/WebGL.data.br",
+      "headers": [
+        { "key": "Content-Encoding", "value": "br" },
+        { "key": "Content-Type", "value": "application/octet-stream" }
+      ]
+    },
+    {
       "source": "/api/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" }
