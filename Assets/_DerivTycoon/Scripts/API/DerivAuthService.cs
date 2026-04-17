@@ -66,15 +66,16 @@ namespace DerivTycoon.API
             // WebGL: check if returning from OAuth redirect
             string code = OAuth_GetUrlParam("code");
             string state = OAuth_GetUrlParam("state");
+            Debug.Log($"[DerivAuth] Start() — code='{(string.IsNullOrEmpty(code) ? "EMPTY" : code.Substring(0, Mathf.Min(20, code.Length)) + "...")}' state='{(string.IsNullOrEmpty(state) ? "EMPTY" : "found")}'");
 
             if (!string.IsNullOrEmpty(code))
             {
-                Debug.Log("[DerivAuth] OAuth code detected in URL ??? exchanging for token...");
+                Debug.Log("[DerivAuth] OAuth code detected — exchanging for token...");
                 StartCoroutine(ExchangeCodeForToken(code, state));
             }
             else
             {
-                Debug.Log("[DerivAuth] No OAuth code ??? showing login");
+                Debug.Log("[DerivAuth] No OAuth code in URL — showing login");
                 OnAuthRequired?.Invoke();
             }
 #else
@@ -132,13 +133,14 @@ namespace DerivTycoon.API
         {
 #if UNITY_WEBGL && !UNITY_EDITOR
             string verifier = OAuth_GetVerifier();
+            Debug.Log($"[DerivAuth] verifier='{(string.IsNullOrEmpty(verifier) ? "EMPTY" : "found")}' url='{TokenExchangeUrl}'");
             OAuth_ClearUrlParams();
 #else
             string verifier = "";
 #endif
             if (string.IsNullOrEmpty(verifier))
             {
-                Debug.LogError("[DerivAuth] No PKCE verifier found ??? auth failed");
+                Debug.LogError("[DerivAuth] No PKCE verifier in localStorage — auth failed");
                 OnAuthRequired?.Invoke();
                 yield break;
             }
