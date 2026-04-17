@@ -86,6 +86,7 @@ var DerivWebSocketPlugin = {
     // Redirect the browser to the OAuth authorization URL (same tab).
     OAuth_Redirect: function(urlPtr) {
         var url = UTF8ToString(urlPtr);
+        console.log('[DerivAuth] Redirecting to:', url);
         window.location.href = url;
     },
 

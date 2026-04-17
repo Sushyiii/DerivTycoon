@@ -3270,7 +3270,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ClientId: 330KiXbdjMqTabIsqjLN4
   AppId: 330KiXbdjMqTabIsqjLN4
-  RedirectUri: https://deriv-tycoon.vercel.app/
+  RedirectUri: https://deriv-tycoon.vercel.app
   TokenExchangeUrl: https://deriv-tycoon.vercel.app/api/auth/token
   EditorTestToken: 
 --- !u!1 &1505926705
