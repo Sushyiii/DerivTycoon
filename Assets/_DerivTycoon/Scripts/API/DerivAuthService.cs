@@ -49,39 +49,39 @@ namespace DerivTycoon.API
 
         private void Start()
         {
+            Debug.Log("[DerivAuth] Start() called");
 #if UNITY_EDITOR
-            // Editor: use manual test token if set
             if (!string.IsNullOrEmpty(EditorTestToken))
             {
-                Debug.Log("[DerivAuth] Editor mode: using test token");
+                Debug.Log("[DerivAuth] Editor: using test token");
                 _accessToken = EditorTestToken;
                 StartCoroutine(ConnectTradingWs());
             }
             else
             {
-                Debug.Log("[DerivAuth] Editor mode: no test token ??? demo mode");
+                Debug.Log("[DerivAuth] Editor: no token, demo mode");
                 OnAuthRequired?.Invoke();
             }
 #elif UNITY_WEBGL
-            // WebGL: use Application.absoluteURL to read OAuth callback params (more reliable than jslib)
-            string absoluteUrl = Application.absoluteURL;
-            Debug.Log($"[DerivAuth] Start() absoluteURL={absoluteUrl.Substring(0, Mathf.Min(80, absoluteUrl.Length))}");
+            string absoluteUrl = Application.absoluteURL ?? string.Empty;
+            Debug.Log($"[DerivAuth] absoluteURL={absoluteUrl}");
 
             string code  = GetQueryParam(absoluteUrl, "code");
             string state = GetQueryParam(absoluteUrl, "state");
-            Debug.Log($"[DerivAuth] code='{(string.IsNullOrEmpty(code) ? "EMPTY" : code.Substring(0, Mathf.Min(20, code.Length)) + "...")}' state='{(string.IsNullOrEmpty(state) ? "EMPTY" : "found")}'");
+            Debug.Log($"[DerivAuth] code={(string.IsNullOrEmpty(code) ? "EMPTY" : "FOUND")} state={(string.IsNullOrEmpty(state) ? "EMPTY" : "FOUND")}");
 
             if (!string.IsNullOrEmpty(code))
             {
-                Debug.Log("[DerivAuth] OAuth code detected — exchanging for token...");
+                Debug.Log("[DerivAuth] Exchanging token...");
                 StartCoroutine(ExchangeCodeForToken(code, state));
             }
             else
             {
-                Debug.Log("[DerivAuth] No OAuth code in URL — showing login");
+                Debug.Log("[DerivAuth] No code — showing login");
                 OnAuthRequired?.Invoke();
             }
 #else
+            Debug.Log("[DerivAuth] Non-WebGL non-Editor build — showing login");
             OnAuthRequired?.Invoke();
 #endif
         }
