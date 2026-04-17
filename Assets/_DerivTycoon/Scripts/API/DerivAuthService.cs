@@ -62,27 +62,21 @@ namespace DerivTycoon.API
                 Debug.Log("[DerivAuth] Editor: no token, demo mode");
                 OnAuthRequired?.Invoke();
             }
-#elif UNITY_WEBGL
-            string absoluteUrl = Application.absoluteURL ?? string.Empty;
-            Debug.Log($"[DerivAuth] absoluteURL={absoluteUrl}");
-
-            string code  = GetQueryParam(absoluteUrl, "code");
-            string state = GetQueryParam(absoluteUrl, "state");
-            Debug.Log($"[DerivAuth] code={(string.IsNullOrEmpty(code) ? "EMPTY" : "FOUND")} state={(string.IsNullOrEmpty(state) ? "EMPTY" : "FOUND")}");
-
-            if (!string.IsNullOrEmpty(code))
+#else
+            // OAuth code was captured by OAuthCallbackHandler.RuntimeInit before scene loaded
+            if (OAuthCallbackHandler.HasPendingCode)
             {
-                Debug.Log("[DerivAuth] Exchanging token...");
+                string code  = OAuthCallbackHandler.PendingCode;
+                string state = OAuthCallbackHandler.PendingState;
+                Debug.Log($"[DerivAuth] Start: pending code found (len={code.Length}) — exchanging token");
+                OAuthCallbackHandler.ClearPending();
                 StartCoroutine(ExchangeCodeForToken(code, state));
             }
             else
             {
-                Debug.Log("[DerivAuth] No code — showing login");
+                Debug.Log("[DerivAuth] Start: no pending code — showing login");
                 OnAuthRequired?.Invoke();
             }
-#else
-            Debug.Log("[DerivAuth] Non-WebGL non-Editor build — showing login");
-            OnAuthRequired?.Invoke();
 #endif
         }
 
