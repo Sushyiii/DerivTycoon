@@ -59,6 +59,12 @@ namespace DerivTycoon.City
             tile.transform.position = worldPos;
             tile.transform.localScale = new Vector3(CellSize / 10f, 1f, CellSize / 10f);
 
+            // Replace MeshCollider (stripped in WebGL) with a BoxCollider
+            var meshCol = tile.GetComponent<Collider>();
+            if (meshCol != null) Destroy(meshCol);
+            var box = tile.AddComponent<BoxCollider>();
+            box.size = new Vector3(10f, 0.1f, 10f); // matches Plane mesh extents in local space
+
             if (TileMaterial != null)
                 tile.GetComponent<Renderer>().material = TileMaterial;
             else
