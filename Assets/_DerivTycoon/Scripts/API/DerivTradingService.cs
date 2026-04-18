@@ -204,8 +204,10 @@ namespace DerivTycoon.API
 
         public void RequestCallProposal(string symbol, float stake, int durationSecs, float barrierOffset, int reqId)
         {
+            // HIGHER supports explicit barriers below spot; CALL is ATM only
+            string contractType = barrierOffset != 0f ? "HIGHER" : "CALL";
             var sb = new StringBuilder();
-            sb.Append("{\"proposal\":1,\"subscribe\":1,\"contract_type\":\"CALL\"");
+            sb.Append($"{{\"proposal\":1,\"subscribe\":1,\"contract_type\":\"{contractType}\"");
             sb.Append($",\"underlying_symbol\":\"{symbol}\"");
             sb.Append($",\"amount\":{stake:F2}");
             sb.Append(",\"basis\":\"stake\"");
