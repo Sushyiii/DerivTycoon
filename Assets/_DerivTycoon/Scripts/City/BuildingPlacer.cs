@@ -134,6 +134,7 @@ namespace DerivTycoon.City
             {
                 if (id != reqId) return;
                 trading.OnProposalReceived -= OnProposal;
+                trading.OnTradingError -= OnError;
                 trading.BuyProposal(proposal.id, proposal.ask_price, reqId);
                 trading.ForgetProposal(proposal.id);
             }
@@ -142,13 +143,29 @@ namespace DerivTycoon.City
             {
                 if (id != reqId) return;
                 trading.OnBuyConfirmed -= OnBuy;
+                trading.OnTradingError -= OnError;
                 GameManager.Instance.SyncBalance(buy.balance_after);
                 PlaceBuildingDemo(entryPrice, buy.contract_id.ToString());
                 _waitingForBuy = false;
             }
 
+            void OnError(string message, int id)
+            {
+                if (id != reqId) return;
+                trading.OnProposalReceived -= OnProposal;
+                trading.OnBuyConfirmed -= OnBuy;
+                trading.OnTradingError -= OnError;
+                GameManager.Instance.AddBalance(defaultStake); // refund
+                _waitingForBuy = false;
+                _pendingCell = null;
+                EventBus.ToastMessage($"Trade failed: {message}");
+                GameManager.Instance.SetState(GameState.LivePlaying);
+                Debug.LogWarning($"[BuildingPlacer] Trade error: {message}");
+            }
+
             trading.OnProposalReceived += OnProposal;
             trading.OnBuyConfirmed += OnBuy;
+            trading.OnTradingError += OnError;
             trading.RequestMultiplierProposal(_pendingSymbol, defaultStake, defaultMultiplier, reqId);
         }
 

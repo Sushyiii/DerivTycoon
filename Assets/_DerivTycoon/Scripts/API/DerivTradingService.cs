@@ -17,6 +17,7 @@ namespace DerivTycoon.API
         public event Action<SellPayload>          OnSellConfirmed;
         public event Action<ProposalOpenContractPayload> OnContractUpdated;
         public event Action<float>                OnBalanceUpdated;
+        public event Action<string, int>          OnTradingError; // (message, reqId)
 
         private DerivWebSocket _tradingSocket;
 
@@ -99,14 +100,24 @@ namespace DerivTycoon.API
         private void HandleProposal(string json)
         {
             var response = JsonUtility.FromJson<ProposalResponse>(json);
-            if (HasError(response.error)) return;
+            if (HasError(response.error))
+            {
+                Debug.LogWarning($"[DerivTrading] Proposal error: {response.error.message} (req={response.req_id})");
+                OnTradingError?.Invoke(response.error.message, response.req_id);
+                return;
+            }
             OnProposalReceived?.Invoke(response.proposal, response.req_id);
         }
 
         private void HandleBuy(string json)
         {
             var response = JsonUtility.FromJson<BuyResponse>(json);
-            if (HasError(response.error)) return;
+            if (HasError(response.error))
+            {
+                Debug.LogWarning($"[DerivTrading] Buy error: {response.error.message} (req={response.req_id})");
+                OnTradingError?.Invoke(response.error.message, response.req_id);
+                return;
+            }
             OnBuyConfirmed?.Invoke(response.buy, response.req_id);
         }
 
