@@ -239,6 +239,7 @@ namespace DerivTycoon.API
                 yield break;
             }
 
+            IsAuthenticated = true;
             Debug.Log("[DerivAuth] Trading WS ready");
             OnTradingWsReady?.Invoke(wsUrl);
         }

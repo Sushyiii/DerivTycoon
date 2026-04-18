@@ -67,7 +67,7 @@ namespace DerivTycoon.Core
             trading.SubscribeBalance();
             IsDemoMode = false;
             Debug.Log("[GameManager] Live trading mode active");
-            if (CurrentState == GameState.DemoPlaying)
+            if (CurrentState == GameState.MainMenu || CurrentState == GameState.DemoPlaying)
                 SetState(GameState.LivePlaying);
         }
 
