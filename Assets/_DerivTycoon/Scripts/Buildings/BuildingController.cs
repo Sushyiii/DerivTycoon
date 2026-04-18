@@ -136,6 +136,7 @@ namespace DerivTycoon.Buildings
         private void StartProduction()
         {
             if (_trade == null) return;
+            if (_cycleRunning) return; // Already in a cycle, don't double-start
 
             float currentPrice = MarketDataStore.Instance?.GetLatestPrice(_symbol) ?? 0f;
             if (currentPrice <= 0f)
@@ -285,24 +286,15 @@ namespace DerivTycoon.Buildings
         {
             if (_trade == null) return;
 
+            _trade.ProductionEnabled = false;
+
             if (_cycleRunning)
             {
-                // Refund the stake for the abandoned cycle
-                GameManager.Instance?.AddBalance(_trade.ProductionStake);
-                Debug.Log($"[Production] Cycle abandoned, refunded ${_trade.ProductionStake:F2}");
-
-                // Unsubscribe from live contract updates
-                if (DerivTradingService.Instance != null)
-                {
-                    DerivTradingService.Instance.OnContractUpdated -= OnContractUpdate;
-                    DerivTradingService.Instance.ForgetContractUpdates(_trade.ActiveCycleSubId);
-                }
-                _trade.ActiveCycleContractId = null;
-                _trade.ActiveCycleSubId = null;
+                // Current cycle is in progress — let it complete, then stop
+                // No refund: the cycle plays out and settles normally
+                Debug.Log($"[Production] Stopping after current cycle completes for {_symbol}");
+                EventBus.ToastMessage($"{CommodityName}: Production will stop after the current cycle completes.");
             }
-
-            _trade.ProductionEnabled = false;
-            _cycleRunning = false;
 
             EventBus.TradeUpdated(_trade);
         }
@@ -344,10 +336,17 @@ namespace DerivTycoon.Buildings
             EventBus.TradeUpdated(_trade);
             Debug.Log($"[Production] {_symbol} cycle {_trade.TotalCyclesRun}: {(win ? "WIN" : "LOSS")} | vault=${_trade.VaultBalance:F2} | streak={_trade.WinStreak}");
 
+            // Stop here if production was disabled during this cycle
+            if (!_trade.ProductionEnabled)
+            {
+                _cycleRunning = false;
+                EventBus.TradeUpdated(_trade);
+                return;
+            }
+
             // Auto-start next cycle: deduct stake and reset timer
             if (!GameManager.Instance.SpendBalance(_trade.ProductionStake))
             {
-                // Can't afford next cycle — stop production
                 _trade.ProductionEnabled = false;
                 _cycleRunning = false;
                 EventBus.ToastMessage("Not enough balance — production stopped.");
