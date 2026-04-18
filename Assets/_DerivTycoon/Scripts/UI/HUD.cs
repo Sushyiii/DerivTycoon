@@ -33,6 +33,7 @@ namespace DerivTycoon.UI
 
         private void UpdateBalance(float balance)
         {
+            Debug.Log($"[HUD] UpdateBalance: {balance} BalanceText={(BalanceText != null ? "set" : "NULL")}");
             if (BalanceText != null)
                 BalanceText.text = $"${balance:N2}";
         }

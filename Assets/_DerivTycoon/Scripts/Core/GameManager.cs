@@ -139,6 +139,7 @@ namespace DerivTycoon.Core
 
         public void SyncBalance(float amount)
         {
+            Debug.Log($"[GameManager] SyncBalance: {amount}");
             Balance = amount;
             EventBus.BalanceChanged(Balance);
         }
