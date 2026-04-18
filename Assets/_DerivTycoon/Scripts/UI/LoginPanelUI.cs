@@ -60,6 +60,7 @@ namespace DerivTycoon.UI
         {
             loginPanel?.SetActive(false);
             loadingPanel?.SetActive(false);
+            gameObject.SetActive(false);
         }
 
         private void OnLoginClicked()
