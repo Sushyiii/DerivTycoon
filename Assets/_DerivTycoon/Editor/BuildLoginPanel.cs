@@ -48,7 +48,7 @@ public static class BuildLoginPanel
 
         // Demo button
         var demoBtn = MakeButton("DemoButton", card.transform, font,
-            "Play Demo (No Login)", 14, new Color(0.2f, 0.35f, 0.55f),
+            "Try without account", 14, new Color(0.2f, 0.35f, 0.55f),
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
             new Vector2(240, 50), new Vector2(0, -30));
 
