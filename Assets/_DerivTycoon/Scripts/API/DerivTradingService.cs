@@ -18,16 +18,33 @@ namespace DerivTycoon.API
         public event Action<ProposalOpenContractPayload> OnContractUpdated;
         public event Action<float>                OnBalanceUpdated;
         public event Action<string, int>          OnTradingError; // (message, reqId)
+        public event Action                       OnTradingDisconnected;
 
         private DerivWebSocket _tradingSocket;
 
         // Caches subscription IDs for open contract subscriptions
         private readonly Dictionary<long, string> _contractSubIds = new();
 
+        private float _pingTimer;
+        private const float PingInterval = 25f;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+        }
+
+        private void Update()
+        {
+            if (_tradingSocket != null && _tradingSocket.IsConnected)
+            {
+                _pingTimer += Time.deltaTime;
+                if (_pingTimer >= PingInterval)
+                {
+                    _pingTimer = 0f;
+                    _tradingSocket.Send("{\"ping\":1}");
+                }
+            }
         }
 
         public void Connect(string wsUrl)
@@ -55,7 +72,9 @@ namespace DerivTycoon.API
         private void OnConnected()
         {
             IsReady = true;
+            _pingTimer = 0f;
             Debug.Log("[DerivTrading] Connected to authenticated trading WS");
+            SubscribeBalance();
         }
 
         private void OnMessage(string json)
@@ -161,6 +180,7 @@ namespace DerivTycoon.API
         {
             IsReady = false;
             Debug.LogWarning($"[DerivTrading] Disconnected ({code}): {reason}");
+            OnTradingDisconnected?.Invoke();
         }
 
         private static bool HasError(ErrorPayload error)

@@ -62,13 +62,29 @@ namespace DerivTycoon.Core
         {
             EnsureService<API.DerivTradingService>("DerivTradingService");
             var trading = API.DerivTradingService.Instance;
-            trading.Connect(wsUrl);
+
+            // Unsubscribe first to avoid duplicate handlers on reconnect
+            trading.OnBalanceUpdated -= SyncBalance;
+            trading.OnTradingDisconnected -= OnTradingDisconnected;
+
             trading.OnBalanceUpdated += SyncBalance;
-            trading.SubscribeBalance();
+            trading.OnTradingDisconnected += OnTradingDisconnected;
+            trading.Connect(wsUrl);
             IsDemoMode = false;
             Debug.Log("[GameManager] Live trading mode active");
             if (CurrentState == GameState.MainMenu || CurrentState == GameState.DemoPlaying)
                 SetState(GameState.LivePlaying);
+        }
+
+        private void OnTradingDisconnected()
+        {
+            Debug.LogWarning("[GameManager] Trading WS dropped — reconnecting in 3s...");
+            Invoke(nameof(ReconnectTrading), 3f);
+        }
+
+        private void ReconnectTrading()
+        {
+            API.DerivAuthService.Instance?.Reconnect();
         }
 
         private void OnConnected()

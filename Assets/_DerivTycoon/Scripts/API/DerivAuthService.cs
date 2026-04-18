@@ -32,6 +32,7 @@ namespace DerivTycoon.API
         private const string BaseUrl = "https://api.derivws.com";
         private const string AuthUrl = "https://auth.deriv.com/oauth2/auth";
         private string _accessToken;
+        private string _cachedAccountId;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")] private static extern string OAuth_GetUrlParam(string param);
@@ -217,21 +218,21 @@ namespace DerivTycoon.API
 
         private IEnumerator ConnectTradingWs()
         {
-            // Step 1: GET accounts
-            string accountId = null;
-            yield return StartCoroutine(GetDemoAccountId(result => accountId = result));
-
-            if (string.IsNullOrEmpty(accountId))
+            // Step 1: GET accounts (skip if cached)
+            if (string.IsNullOrEmpty(_cachedAccountId))
             {
-                Debug.LogError("[DerivAuth] Could not find demo account");
-                yield break;
+                yield return StartCoroutine(GetDemoAccountId(result => _cachedAccountId = result));
+                if (string.IsNullOrEmpty(_cachedAccountId))
+                {
+                    Debug.LogError("[DerivAuth] Could not find demo account");
+                    yield break;
+                }
+                Debug.Log($"[DerivAuth] Demo account: {_cachedAccountId}");
             }
 
-            Debug.Log($"[DerivAuth] Demo account: {accountId}");
-
-            // Step 2: POST OTP
+            // Step 2: POST OTP (always fresh — OTPs are single-use)
             string wsUrl = null;
-            yield return StartCoroutine(GetOtp(accountId, result => wsUrl = result));
+            yield return StartCoroutine(GetOtp(_cachedAccountId, result => wsUrl = result));
 
             if (string.IsNullOrEmpty(wsUrl))
             {
@@ -242,6 +243,13 @@ namespace DerivTycoon.API
             IsAuthenticated = true;
             Debug.Log("[DerivAuth] Trading WS ready");
             OnTradingWsReady?.Invoke(wsUrl);
+        }
+
+        public void Reconnect()
+        {
+            if (!IsAuthenticated || string.IsNullOrEmpty(_accessToken)) return;
+            Debug.Log("[DerivAuth] Reconnecting trading WS...");
+            StartCoroutine(ConnectTradingWs());
         }
 
         private IEnumerator GetDemoAccountId(Action<string> callback)
