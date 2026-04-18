@@ -76,6 +76,8 @@ namespace DerivTycoon.Buildings
         private void Update()
         {
             if (_trade == null || !_trade.ProductionEnabled || !_cycleRunning) return;
+            // Live contract in progress — wait for API expiry event, don't use demo timer
+            if (!string.IsNullOrEmpty(_trade.ActiveCycleContractId)) return;
 
             if (Time.time - _cycleStartTime >= _trade.ProductionCycleDuration)
                 EvaluateCycle();
@@ -169,6 +171,7 @@ namespace DerivTycoon.Buildings
             {
                 if (id != reqId) return;
                 trading.OnProposalReceived -= OnProposal;
+                trading.OnTradingError -= OnCycleError;
                 trading.BuyProposal(proposal.id, proposal.ask_price, reqId);
                 trading.ForgetProposal(proposal.id);
             }
@@ -177,14 +180,31 @@ namespace DerivTycoon.Buildings
             {
                 if (id != reqId) return;
                 trading.OnBuyConfirmed -= OnBuy;
+                trading.OnTradingError -= OnCycleError;
                 _trade.ActiveCycleContractId = buy.contract_id.ToString();
                 trading.SubscribeContractUpdates(buy.contract_id);
                 trading.OnContractUpdated += OnContractUpdate;
                 Debug.Log($"[Production] CALL contract {buy.contract_id} bought for {_symbol}");
             }
 
+            void OnCycleError(string message, int id)
+            {
+                if (id != reqId) return;
+                trading.OnProposalReceived -= OnProposal;
+                trading.OnBuyConfirmed -= OnBuy;
+                trading.OnTradingError -= OnCycleError;
+                // Refund stake and stop production on cycle error
+                GameManager.Instance?.AddBalance(_trade.ProductionStake);
+                _trade.ProductionEnabled = false;
+                _cycleRunning = false;
+                EventBus.ToastMessage($"Production failed: {message}");
+                EventBus.TradeUpdated(_trade);
+                Debug.LogWarning($"[Production] Cycle error for {_symbol}: {message}");
+            }
+
             trading.OnProposalReceived += OnProposal;
             trading.OnBuyConfirmed += OnBuy;
+            trading.OnTradingError += OnCycleError;
             trading.RequestCallProposal(
                 _symbol,
                 _trade.ProductionStake,

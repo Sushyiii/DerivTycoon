@@ -8,7 +8,7 @@ namespace DerivTycoon.Buildings
         {
             new BuildingConfig("frxXAUUSD", "Gold Mine",     new Color(1.0f, 0.8f, 0.1f),  3.0f, "GoldMinePrefab",     300f, 0f),
             new BuildingConfig("frxXAGUSD", "Silver Mint",   new Color(0.75f, 0.75f, 0.8f), 2.5f, "SilverMintPrefab",   300f, 0f),
-            new BuildingConfig("1HZ100V",   "Trading Tower", new Color(0.1f, 0.9f, 0.5f),  4.0f, "TradingTowerPrefab",  60f, -1.2f),
+            new BuildingConfig("1HZ100V",   "Trading Tower", new Color(0.1f, 0.9f, 0.5f),  4.0f, "TradingTowerPrefab",  60f, 0f),
         };
 
         public static GameObject Create(string symbol, Vector3 position)
