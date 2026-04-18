@@ -42,8 +42,9 @@ namespace DerivTycoon.Trading
             _activeTrades.Remove(trade.Id);
 
             float pnl = trade.PnL;
-            // Return stake + profit (or stake - loss)
-            GameManager.Instance?.AddBalance(trade.Stake + pnl);
+            // Only add balance locally in demo mode — live mode syncs from real API sell response
+            if (GameManager.Instance?.IsDemoMode == true)
+                GameManager.Instance?.AddBalance(trade.Stake + pnl);
 
             string sign = pnl >= 0 ? "+" : "";
             Debug.Log($"[TradeManager] Closed: {trade.CommodityName} P&L={sign}{pnl:F2}");
