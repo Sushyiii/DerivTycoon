@@ -2,6 +2,7 @@ using DerivTycoon.API;
 using DerivTycoon.API.Models;
 using DerivTycoon.City;
 using DerivTycoon.Core;
+using DerivTycoon.Trading;
 using DerivTycoon.UI;
 using UnityEngine;
 
@@ -360,6 +361,48 @@ namespace DerivTycoon.Buildings
 
         // ==================== Trade Close ====================
 
+        // Called by BuildingInfoUI instead of TradeManager.CloseTrade directly.
+        // Ensures any active cycle contract is closed first before selling the mine.
+        public void TrySellMine()
+        {
+            if (_trade == null) return;
+
+            var trading = DerivTradingService.Instance;
+            bool hasCycle = !string.IsNullOrEmpty(_trade.ActiveCycleContractId) &&
+                            long.TryParse(_trade.ActiveCycleContractId, out long cycleId);
+
+            if (hasCycle && trading != null && trading.IsReady)
+            {
+                long.TryParse(_trade.ActiveCycleContractId, out cycleId);
+
+                void OnCycleSellOk(SellPayload sold)
+                {
+                    trading.OnSellConfirmed -= OnCycleSellOk;
+                    trading.OnTradingError  -= OnCycleSellFail;
+                    GameManager.Instance?.SyncBalance(sold.balance_after);
+                    Debug.Log($"[Production] Cycle contract {cycleId} closed — proceeding to sell mine");
+                    TradeManager.Instance?.CloseTrade(_trade.Id);
+                }
+
+                void OnCycleSellFail(string msg, int id)
+                {
+                    trading.OnSellConfirmed -= OnCycleSellOk;
+                    trading.OnTradingError  -= OnCycleSellFail;
+                    Debug.LogWarning($"[Production] Cannot close cycle contract yet: {msg}");
+                    EventBus.ToastMessage("Please wait for the current production cycle to complete before selling.");
+                }
+
+                trading.OnSellConfirmed += OnCycleSellOk;
+                trading.OnTradingError  += OnCycleSellFail;
+                trading.SellContract(cycleId);
+            }
+            else
+            {
+                // No active cycle or demo mode — sell directly
+                TradeManager.Instance?.CloseTrade(_trade.Id);
+            }
+        }
+
         private void OnTradeClosedEvent(Trade trade)
         {
             if (_trade == null || trade.Id != _trade.Id) return;
@@ -367,7 +410,7 @@ namespace DerivTycoon.Buildings
             EventBus.OnTickReceived -= OnTickReceived;
             EventBus.OnTradeClosed  -= OnTradeClosedEvent;
 
-            // Stop production cleanly
+            // Stop production and clean up subscriptions
             _trade.ProductionEnabled = false;
             _cycleRunning = false;
 
@@ -376,37 +419,11 @@ namespace DerivTycoon.Buildings
             {
                 trading.OnContractUpdated -= OnContractUpdate;
                 trading.ForgetContractUpdates(_trade.ActiveCycleSubId);
-
-                // Close the active production cycle contract if one is open
-                if (!string.IsNullOrEmpty(_trade.ActiveCycleContractId) &&
-                    long.TryParse(_trade.ActiveCycleContractId, out long cycleId))
-                {
-                    Debug.Log($"[Production] Attempting to sell cycle contract {cycleId} on mine close");
-
-                    // Handle case where contract cannot be closed (e.g. last few seconds)
-                    void OnSellError(string msg, int id)
-                    {
-                        trading.OnTradingError -= OnSellError;
-                        Debug.LogWarning($"[Production] Could not close cycle contract {cycleId}: {msg} — will expire naturally");
-                        // Balance will still sync via balance subscription when it expires
-                    }
-                    void OnSellOk(SellPayload sold)
-                    {
-                        trading.OnSellConfirmed -= OnSellOk;
-                        GameManager.Instance?.SyncBalance(sold.balance_after);
-                        Debug.Log($"[Production] Cycle contract {cycleId} closed on mine sell");
-                    }
-
-                    trading.OnTradingError += OnSellError;
-                    trading.OnSellConfirmed += OnSellOk;
-                    trading.SellContract(cycleId);
-                }
             }
-            else
+            else if (_cycleRunning)
             {
-                // Demo mode: refund stake for the interrupted cycle
-                if (_cycleRunning)
-                    GameManager.Instance?.AddBalance(_trade.ProductionStake);
+                // Demo mode: refund stake for interrupted cycle
+                GameManager.Instance?.AddBalance(_trade.ProductionStake);
             }
 
             bool isWin = trade.PnL >= 0f;

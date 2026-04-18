@@ -169,8 +169,9 @@ namespace DerivTycoon.UI
 
         private void OnSell()
         {
-            if (_currentTrade == null) return;
-            TradeManager.Instance?.CloseTrade(_currentTrade.Id);
+            if (_currentTrade == null || _currentBuilding == null) return;
+            // Let BuildingController handle cycle-first logic
+            _currentBuilding.TrySellMine();
             Hide();
         }
 
