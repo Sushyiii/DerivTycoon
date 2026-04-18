@@ -62,7 +62,7 @@ namespace DerivTycoon.UI
         private void Update()
         {
             if (_currentBuilding == null || _currentTrade == null) return;
-            if (_currentTrade.ProductionEnabled)
+            if (_currentTrade.ProductionEnabled || _currentBuilding.IsCycleRunning)
                 UpdateCountdown();
         }
 
@@ -111,12 +111,13 @@ namespace DerivTycoon.UI
 
             if (SellButton != null)
             {
+                bool cycleActive = _currentBuilding != null && _currentBuilding.IsCycleRunning;
                 SellButton.gameObject.SetActive(_currentTrade.IsActive);
-                SellButton.interactable = !_currentTrade.ProductionEnabled;
+                SellButton.interactable = !cycleActive;
                 var sellImg = SellButton.GetComponent<UnityEngine.UI.Image>();
                 if (sellImg != null)
-                    sellImg.color = _currentTrade.ProductionEnabled
-                        ? new Color(0.4f, 0.07f, 0.05f)   // dimmed while producing
+                    sellImg.color = cycleActive
+                        ? new Color(0.4f, 0.07f, 0.05f)   // dimmed while cycle running
                         : new Color(0.7f, 0.12f, 0.08f);  // full red when available
             }
         }
@@ -133,13 +134,19 @@ namespace DerivTycoon.UI
                     ? $"Streak: {_currentTrade.WinStreak}"
                     : $"Cycles: {_currentTrade.TotalCyclesRun}";
 
+            bool isStopping = !_currentTrade.ProductionEnabled &&
+                              _currentBuilding != null && _currentBuilding.IsCycleRunning;
+
             if (ToggleProductionButtonText != null)
                 ToggleProductionButtonText.text = _currentTrade.ProductionEnabled
                     ? "Stop Production"
-                    : "Start Production";
+                    : isStopping ? "Finishing cycle..." : "Start Production";
 
             if (ToggleProductionButton != null)
+            {
                 ToggleProductionButton.gameObject.SetActive(_currentTrade.IsActive);
+                ToggleProductionButton.interactable = !isStopping; // disable during finishing
+            }
 
             UpdateCountdown();
         }
@@ -148,12 +155,15 @@ namespace DerivTycoon.UI
         {
             if (CountdownText == null || _currentBuilding == null) return;
 
-            if (_currentTrade != null && _currentTrade.ProductionEnabled)
+            bool cycleRunning = _currentBuilding.IsCycleRunning;
+            if (cycleRunning)
             {
                 float secs = _currentBuilding.CycleCountdownSeconds;
                 int mins = Mathf.FloorToInt(secs / 60f);
                 int s    = Mathf.FloorToInt(secs % 60f);
-                CountdownText.text = mins > 0 ? $"Next: {mins}m {s:D2}s" : $"Next: {s}s";
+                string prefix = _currentTrade != null && !_currentTrade.ProductionEnabled
+                    ? "Finishing: " : "Next: ";
+                CountdownText.text = mins > 0 ? $"{prefix}{mins}m {s:D2}s" : $"{prefix}{s}s";
             }
             else
             {

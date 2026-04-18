@@ -31,6 +31,7 @@ namespace DerivTycoon.Buildings
         // Public accessors
         public Trade Trade => _trade;
         public string CommodityName => GameManager.Instance?.GetCommodityName(_symbol) ?? _symbol;
+        public bool IsCycleRunning => _cycleRunning;
         public float CycleCountdownSeconds => (_cycleRunning && _trade != null)
             ? Mathf.Max(0f, _trade.ProductionCycleDuration - (Time.time - _cycleStartTime))
             : 0f;
