@@ -4728,7 +4728,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16922d91212ac4171bc54dd56a77161b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  BalanceText: {fileID: 0}
+  BalanceText: {fileID: 1078139200}
   NewTradeButton: {fileID: 230501807}
   TradePanel: {fileID: 1722557749}
 --- !u!114 &2080579641
