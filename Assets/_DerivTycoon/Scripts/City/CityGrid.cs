@@ -15,6 +15,10 @@ namespace DerivTycoon.City
         public Material TileMaterial;
         public Material TileHighlightMaterial;
 
+        [Header("Construction Props")]
+        public GameObject[] SmallPropPrefabs;
+        public GameObject[] VehiclePrefabs;
+
         private GridCell[,] _cells;
         private GameObject[,] _tileObjects;
 
@@ -63,19 +67,23 @@ namespace DerivTycoon.City
             var meshCol = tile.GetComponent<Collider>();
             if (meshCol != null) Destroy(meshCol);
             var box = tile.AddComponent<BoxCollider>();
-            box.size = new Vector3(10f, 0.1f, 10f); // matches Plane mesh extents in local space
+            box.size = new Vector3(10f, 0.1f, 10f);
 
             if (TileMaterial != null)
                 tile.GetComponent<Renderer>().material = TileMaterial;
             else
             {
-                // Checkerboard pattern using default material
+                // Dirt/gravel construction plot ground
                 var mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
                 mat.color = (x + z) % 2 == 0
-                    ? new Color(0.2f, 0.25f, 0.3f)
-                    : new Color(0.15f, 0.18f, 0.22f);
+                    ? new Color(0.45f, 0.35f, 0.25f)   // warm dirt
+                    : new Color(0.40f, 0.31f, 0.22f);  // slightly darker dirt
                 tile.GetComponent<Renderer>().material = mat;
             }
+
+            // Add construction plot props
+            var plot = tile.AddComponent<ConstructionPlot>();
+            plot.Init(CellSize, SmallPropPrefabs, VehiclePrefabs);
 
             return tile;
         }
@@ -122,6 +130,10 @@ namespace DerivTycoon.City
 
             building.transform.position = cell.WorldPosition;
             cell.PlaceBuilding(building);
+
+            // Clear construction props from this tile
+            _tileObjects[x, z]?.GetComponent<ConstructionPlot>()?.ClearProps();
+
             return true;
         }
 
@@ -129,6 +141,9 @@ namespace DerivTycoon.City
         {
             var cell = GetCell(x, z);
             cell?.ClearBuilding();
+
+            // Restore construction props when building is removed
+            _tileObjects[x, z]?.GetComponent<ConstructionPlot>()?.RestoreProps();
         }
     }
 }
