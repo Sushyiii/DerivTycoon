@@ -244,7 +244,7 @@ namespace UnityStandardAssets.CinematicEffects
 
         private void SetLUTImportSettings(TextureImporter importer)
         {
-            importer.textureType = TextureImporterType.Advanced;
+            importer.textureType = TextureImporterType.Default;
             importer.anisoLevel = 0;
             importer.mipmapEnabled = false;
             importer.linearTexture = true;
@@ -367,7 +367,7 @@ namespace UnityStandardAssets.CinematicEffects
                     bool valid = importer.anisoLevel == 0
                         && importer.mipmapEnabled == false
                         && importer.linearTexture == true
-                        && (importer.textureFormat == TextureImporterFormat.RGB24 || importer.textureFormat == TextureImporterFormat.AutomaticTruecolor);
+                        && (importer.textureFormat == TextureImporterFormat.RGB24 || importer.textureFormat == TextureImporterFormat.RGBA32);
 
                     if (!valid)
                     {
